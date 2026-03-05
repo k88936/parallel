@@ -1,8 +1,5 @@
-mod worker;
-
 use std::path::PathBuf;
 use tracing::{info, Level};
-use worker::{Task, Worker};
 
 fn init_logging() {
     tracing_subscriber::fmt()
@@ -13,7 +10,7 @@ fn init_logging() {
         .with_line_number(true)
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
-                .with_default_directive(Level::DEBUG.into())
+                .with_default_directive(Level::INFO.into())
                 .from_env_lossy()
         )
         .init();
@@ -37,9 +34,9 @@ async fn main() -> anyhow::Result<()> {
         "Worker configuration loaded"
     );
 
-    let worker = Worker::new(work_base, agent_path, max_concurrent);
+    let worker = parallel::worker::Worker::new(work_base, agent_path, max_concurrent);
 
-    let task = Task {
+    let task = parallel::worker::Task {
         id: "task-001".to_string(),
         repo_url: "git@github.com:k88936/test.git".to_string(),
         description: "write hello world to README.md".to_string(),
