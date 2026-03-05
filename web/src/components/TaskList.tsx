@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Task, TaskStatus } from '@/types/task';
 import { api } from '@/lib/api';
 
@@ -31,6 +32,7 @@ export function TaskList({
 }: {
   refreshKey: number;
 }) {
+  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,11 @@ export function TaskList({
   useEffect(() => {
     fetchTasks();
   }, [refreshKey, statusFilter]);
+
+  const handleViewDetails = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/task/${taskId}`);
+  };
 
   const handleCancel = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -98,40 +105,48 @@ export function TaskList({
               key={task.id}
               className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        STATUS_COLORS[task.status]
-                      }`}
-                    >
-                      {STATUS_LABELS[task.status]}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Priority: {task.priority}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Iteration: {task.current_iteration}
-                    </span>
+<div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          STATUS_COLORS[task.status]
+                        }`}
+                      >
+                        {STATUS_LABELS[task.status]}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Priority: {task.priority}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Iteration: {task.current_iteration}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 mb-1 truncate">
+                      {task.description}
+                    </p>
+                    <p className="text-xs text-gray-600 truncate">{task.repo_url}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Created: {new Date(task.created_at).toLocaleString()}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium text-gray-900 mb-1 truncate">
-                    {task.description}
-                  </p>
-                  <p className="text-xs text-gray-600 truncate">{task.repo_url}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Created: {new Date(task.created_at).toLocaleString()}
-                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={(e) => handleViewDetails(task.id, e)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      View Details
+                    </button>
+                    {task.status !== 'completed' && task.status !== 'cancelled' && (
+                      <button
+                        onClick={(e) => handleCancel(task.id, e)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {task.status !== 'completed' && task.status !== 'cancelled' && (
-                  <button
-                    onClick={(e) => handleCancel(task.id, e)}
-                    className="text-red-600 hover:text-red-800 text-sm font-medium"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
             </div>
           ))}
         </div>

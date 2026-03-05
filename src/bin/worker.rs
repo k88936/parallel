@@ -47,6 +47,8 @@ async fn main() -> anyhow::Result<()> {
     let max_concurrent = env::var("MAX_CONCURRENT")
         .map(|v| v.parse().unwrap_or(4))
         .unwrap_or(4);
+    let ws_url = env::var("WEBSOCKET_URL")
+        .unwrap_or_else(|_| "ws://localhost:3000/ws/worker".to_string());
 
     info!(
         work_base = %work_base.display(),
@@ -55,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
         worker_name = %worker_name,
         ssh_key = %ssh_key_path.display(),
         max_concurrent = max_concurrent,
+        ws_url = %ws_url,
         "Worker configuration loaded"
     );
 
@@ -64,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
         max_concurrent,
         server_url,
         ssh_key_path,
+        ws_url,
     );
 
     info!("Registering worker with server...");

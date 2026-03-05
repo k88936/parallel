@@ -11,6 +11,7 @@ use tracing::info;
 use crate::server::db::migration::Migrator;
 use crate::server::handlers::{task, worker, session};
 use crate::server::state::AppState;
+use crate::server::websocket::{worker_conn, human_conn};
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     info!("Connecting to database: {}", database_url);
@@ -33,6 +34,8 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/workers", get(worker::list_workers))
         .route("/api/tasks/claim", post(task::claim_task))
         .route("/api/sessions", post(session::create_session))
+        .route("/ws/worker", get(worker_conn::worker_ws_handler))
+        .route("/ws/human", get(human_conn::human_ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

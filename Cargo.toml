@@ -39,6 +39,9 @@ chrono = { version = "0.4", features = ["serde"] }
 # Async utilities
 futures = "0.3"
 
+# WebSocket
+tokio-tungstenite = "0.24"
+
 # HTTP client
 reqwest = { version = "0.12", features = ["json"] }
 
