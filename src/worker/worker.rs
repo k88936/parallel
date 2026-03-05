@@ -83,11 +83,11 @@ impl Worker {
                 _ = poll_interval.tick() => {
                     if current_task.is_none() {
                         match self.try_claim_and_execute().await {
-                            Ok(Some(task_id)) => {
-                                current_task = Some(task_id);
+                            Ok(Some(_)) => {
+                                current_task = None;
                             }
                             Ok(None) => {
-                                // No tasks available
+                                current_task = None;
                             }
                             Err(e) => {
                                 error!("Error during task claim/execution: {}", e);
