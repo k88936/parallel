@@ -3,7 +3,7 @@ use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
 
-use crate::protocol::{Task, TaskStatus, TaskPriority, TaskIteration};
+use crate::protocol::{Task, TaskStatus, TaskPriority, TaskIteration, IterationResult};
 use crate::server::db::entity::{tasks, task_iterations};
 
 pub struct TaskScheduler {
@@ -186,6 +186,50 @@ impl TaskScheduler {
         task.status = Set(status.as_str().to_string());
         task.updated_at = Set(now);
         task.update(&self.db).await?;
+
+        Ok(())
+    }
+
+    pub async fn complete_iteration(
+        &self,
+        task_id: &Uuid,
+        status: TaskStatus,
+        result: Option<IterationResult>,
+    ) -> Result<()> {
+        let now = Utc::now();
+
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
+
+        let current_iteration = task.current_iteration;
+
+        let mut task_update: tasks::ActiveModel = task.into();
+        task_update.status = Set(status.as_str().to_string());
+        task_update.updated_at = Set(now);
+        
+        if status == TaskStatus::Completed {
+            task_update.claimed_by = Set(None);
+        }
+        
+        task_update.update(&self.db).await?;
+
+        if let Some(iteration_result) = result {
+            let iteration = task_iterations::Entity::find()
+                .filter(task_iterations::Column::TaskId.eq(*task_id))
+                .filter(task_iterations::Column::IterationId.eq(current_iteration))
+                .one(&self.db)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Iteration not found"))?;
+
+            let mut iteration_update: task_iterations::ActiveModel = iteration.into();
+            iteration_update.completed_at = Set(Some(now));
+            iteration_update.result_json = Set(Some(
+                serde_json::to_string(&iteration_result)?
+            ));
+            iteration_update.update(&self.db).await?;
+        }
 
         Ok(())
     }

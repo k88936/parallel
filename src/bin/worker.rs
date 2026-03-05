@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::env;
 use tracing::{info, Level};
 
 fn init_logging() {
@@ -23,44 +24,53 @@ async fn main() -> anyhow::Result<()> {
     info!("=== Parallel Worker Starting ===");
     info!("Initializing worker configuration");
 
-    let work_base = PathBuf::from("./work");
-    let agent_path = PathBuf::from("opencode");
-    let max_concurrent = 4;
+    let work_base = PathBuf::from(
+        env::var("WORKER_WORK_BASE").unwrap_or_else(|_| "./work".to_string())
+    );
+    let agent_path = PathBuf::from(
+        env::var("WORKER_AGENT_PATH").unwrap_or_else(|_| "opencode".to_string())
+    );
+    let server_url = env::var("SERVER_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let worker_name = env::var("WORKER_NAME")
+        .unwrap_or_else(|_| {
+            format!("worker-{}", hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "unknown".to_string()))
+        });
+    let ssh_key_path = PathBuf::from(
+        env::var("SSH_KEY_PATH").unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            format!("{}/.ssh/id_rsa", home)
+        })
+    );
+    let max_concurrent = env::var("MAX_CONCURRENT")
+        .map(|v| v.parse().unwrap_or(4))
+        .unwrap_or(4);
 
     info!(
         work_base = %work_base.display(),
         agent_path = %agent_path.display(),
+        server_url = %server_url,
+        worker_name = %worker_name,
+        ssh_key = %ssh_key_path.display(),
         max_concurrent = max_concurrent,
         "Worker configuration loaded"
     );
 
-    let worker = parallel::worker::Worker::new(work_base, agent_path, max_concurrent);
-
-    let task = parallel::worker::Task {
-        id: "task-001".to_string(),
-        repo_url: "git@github.com:k88936/test.git".to_string(),
-        description: "write hello world to README.md".to_string(),
-        branch_name: "task/task-001".to_string(),
-        ssh_key_path: PathBuf::from("~/.ssh/id_rsa"),
-    };
-
-    info!(
-        task_id = %task.id,
-        repo_url = %task.repo_url,
-        description = %task.description,
-        branch = %task.branch_name,
-        "Submitting task for execution"
+    let mut worker = parallel::worker::Worker::new(
+        work_base,
+        agent_path,
+        max_concurrent,
+        server_url,
+        ssh_key_path,
     );
 
-    let result = worker.execute(task).await;
+    info!("Registering worker with server...");
+    worker.register(&worker_name).await?;
 
-    info!(
-        success = result.success,
-        task_id = %result.task_id,
-        branch = %result.branch_name,
-        error = ?result.error,
-        "Task execution completed"
-    );
+    info!("Starting worker main loop");
+    worker.run().await?;
 
     info!("=== Parallel Worker Finished ===");
 

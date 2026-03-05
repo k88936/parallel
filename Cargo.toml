@@ -39,7 +39,12 @@ chrono = { version = "0.4", features = ["serde"] }
 # Async utilities
 futures = "0.3"
 
-[dev-dependencies]
+# HTTP client
 reqwest = { version = "0.12", features = ["json"] }
+
+# System utilities
+hostname = "0.4"
+
+[dev-dependencies]
 tokio-test = "0.4"
 once_cell = "1.19"

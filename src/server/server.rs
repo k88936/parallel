@@ -27,6 +27,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/tasks/:id", get(task::get_task))
         .route("/api/tasks/:id", delete(task::cancel_task))
         .route("/api/tasks/:id/feedback", post(task::submit_feedback))
+        .route("/api/tasks/:id/status", post(task::update_task_status))
         .route("/api/workers/register", post(worker::register_worker))
         .route("/api/workers/heartbeat", post(worker::heartbeat))
         .route("/api/workers", get(worker::list_workers))

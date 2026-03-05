@@ -3,10 +3,17 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::protocol::*;
 use crate::server::state::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTaskStatusRequest {
+    pub status: TaskStatus,
+    pub result: Option<IterationResult>,
+}
 
 pub async fn create_task(
     State(state): State<AppState>,
@@ -109,4 +116,29 @@ pub async fn submit_feedback(
 ) -> Result<StatusCode, StatusCode> {
     tracing::info!("Feedback submitted for task {}", task_id);
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_task_status(
+    State(state): State<AppState>,
+    Path(task_id): Path<Uuid>,
+    Json(payload): Json<UpdateTaskStatusRequest>,
+) -> Result<StatusCode, StatusCode> {
+    match state
+        .scheduler
+        .complete_iteration(&task_id, payload.status, payload.result)
+        .await
+    {
+        Ok(()) => {
+            tracing::info!(
+                "Task {} status updated to {:?}",
+                task_id,
+                payload.status
+            );
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Err(e) => {
+            tracing::error!("Failed to update task status: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

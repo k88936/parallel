@@ -1,46 +1,167 @@
-use crate::worker::client::TaskClient;
+use crate::protocol::{IterationResult, IterationStatus, Task as ProtocolTask, TaskStatus, WorkerCapabilities};
+use crate::worker::task_client::TaskClient;
 use crate::worker::git::GitOps;
-use crate::worker::task::{Task, TaskResult};
-use agent_client_protocol::{Agent as _, ClientCapabilities, FileSystemCapability, ContentBlock};
+use crate::worker::server_client::ServerClient;
+use crate::worker::task::Task;
+use agent_client_protocol::{Agent as _, ClientCapabilities as AcpClientCapabilities, FileSystemCapability, ContentBlock};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 pub struct Worker {
     work_base: PathBuf,
     agent_path: PathBuf,
     max_concurrent: usize,
     semaphore: Arc<Semaphore>,
+    server_client: Arc<ServerClient>,
+    worker_id: Uuid,
+    ssh_key_path: PathBuf,
 }
 
 impl Worker {
-    pub fn new(work_base: PathBuf, agent_path: PathBuf, max_concurrent: usize) -> Self {
+    pub fn new(
+        work_base: PathBuf,
+        agent_path: PathBuf,
+        max_concurrent: usize,
+        server_url: String,
+        ssh_key_path: PathBuf,
+    ) -> Self {
         Self {
             work_base,
             agent_path,
             max_concurrent,
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
+            server_client: Arc::new(ServerClient::new(server_url)),
+            worker_id: Uuid::nil(),
+            ssh_key_path,
         }
     }
 
-    pub async fn execute(&self, task: Task) -> TaskResult {
-        let _permit = self.semaphore.acquire().await.unwrap();
-        info!("Starting task {} in concurrent slot", task.id);
+    pub async fn register(&mut self, name: &str) -> Result<()> {
+        let capabilities = WorkerCapabilities::default();
+        
+        let worker_info = self
+            .server_client
+            .register(name.to_string(), capabilities, self.max_concurrent)
+            .await
+            .context("Failed to register with server")?;
 
-        let result = self.execute_task_inner(&task).await;
+        self.worker_id = worker_info.id;
+        info!("Worker registered with ID: {}", self.worker_id);
 
-        match &result {
-            Ok(()) => {
-                info!("Task {} completed successfully", task.id);
-                TaskResult::success(task.id.clone(), task.branch_name.clone())
+        Ok(())
+    }
+
+    pub async fn run(&self) -> Result<()> {
+        if self.worker_id == Uuid::nil() {
+            anyhow::bail!("Worker not registered. Call register() first.");
+        }
+
+        let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10));
+        let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
+
+        info!("Worker {} starting main loop", self.worker_id);
+
+        let mut current_task: Option<Uuid> = None;
+
+        loop {
+            tokio::select! {
+                _ = heartbeat_interval.tick() => {
+                    if let Err(e) = self.server_client
+                        .heartbeat(self.worker_id, current_task)
+                        .await
+                    {
+                        warn!("Heartbeat failed: {}", e);
+                    }
+                }
+
+                _ = poll_interval.tick() => {
+                    if current_task.is_none() {
+                        match self.try_claim_and_execute().await {
+                            Ok(Some(task_id)) => {
+                                current_task = Some(task_id);
+                            }
+                            Ok(None) => {
+                                // No tasks available
+                            }
+                            Err(e) => {
+                                error!("Error during task claim/execution: {}", e);
+                            }
+                        }
+                    }
+                }
             }
-            Err(e) => {
-                error!("Task {} failed: {}", task.id, e);
-                TaskResult::failure(task.id.clone(), task.branch_name.clone(), e.to_string())
+        }
+    }
+
+    async fn try_claim_and_execute(&self) -> Result<Option<Uuid>> {
+        let task = self.server_client.claim_task(self.worker_id).await?;
+
+        if let Some(protocol_task) = task {
+            let task_id = protocol_task.id;
+            info!("Claimed task: {}", task_id);
+
+            let worker_task = self.protocol_to_worker_task(&protocol_task);
+
+            let _permit = self.semaphore.acquire().await.unwrap();
+            info!("Starting task {} in concurrent slot", task_id);
+
+            let result = self.execute_task_inner(&worker_task).await;
+
+            let (status, iteration_result) = match &result {
+                Ok(()) => {
+                    info!("Task {} completed successfully", task_id);
+                    (
+                        TaskStatus::Completed,
+                        Some(IterationResult {
+                            status: IterationStatus::Success,
+                            summary: format!("Task completed: {}", worker_task.description),
+                            files_changed: vec![],
+                            commits: vec![format!("Implement: {}", worker_task.description)],
+                            agent_messages: vec![],
+                        }),
+                    )
+                }
+                Err(e) => {
+                    error!("Task {} failed: {}", task_id, e);
+                    (
+                        TaskStatus::Completed,
+                        Some(IterationResult {
+                            status: IterationStatus::Failed,
+                            summary: format!("Task failed: {}", e),
+                            files_changed: vec![],
+                            commits: vec![],
+                            agent_messages: vec![],
+                        }),
+                    )
+                }
+            };
+
+            if let Err(e) = self.server_client
+                .report_task_status(task_id, status, iteration_result)
+                .await
+            {
+                error!("Failed to report task status: {}", e);
             }
+
+            return Ok(Some(task_id));
+        }
+
+        Ok(None)
+    }
+
+    fn protocol_to_worker_task(&self, protocol_task: &ProtocolTask) -> Task {
+        Task {
+            id: protocol_task.id.to_string(),
+            repo_url: protocol_task.repo_url.clone(),
+            description: protocol_task.description.clone(),
+            branch_name: protocol_task.target_branch.clone(),
+            ssh_key_path: self.ssh_key_path.clone(),
         }
     }
 
@@ -105,7 +226,7 @@ impl Worker {
                         agent_client_protocol::ProtocolVersion::LATEST
                     )
                     .client_capabilities(
-                        ClientCapabilities::default()
+                        AcpClientCapabilities::default()
                             .fs(FileSystemCapability::default()
                                 .read_text_file(true)
                                 .write_text_file(true))
