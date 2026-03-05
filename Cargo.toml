@@ -1,0 +1,16 @@
+[package]
+name = "parallel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+agent-client-protocol = "0.9.5"
+tokio = { version = "1", features = ["full", "process", "io-util"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+serde = { version = "1", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "chrono"] }
+async-trait = "0.1"
+uuid = { version = "1", features = ["v4"] }
+which = "8.0.0"
