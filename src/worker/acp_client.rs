@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::protocol::AgentMessage;
+use crate::protocol::{AgentMessage, MessageType};
 
 #[derive(Debug)]
 struct RunningTerminal {
@@ -19,6 +19,7 @@ pub struct ACPClient {
     workdir: PathBuf,
     terminals: RwLock<HashMap<acp::TerminalId, Arc<RunningTerminal>>>,
     messages: Arc<RwLock<Vec<AgentMessage>>>,
+    current_message_type: RwLock<Option<MessageType>>,
 }
 
 impl ACPClient {
@@ -29,6 +30,7 @@ impl ACPClient {
             workdir,
             terminals: RwLock::new(HashMap::new()),
             messages: Arc::new(RwLock::new(Vec::new())),
+            current_message_type: RwLock::new(None),
         }
     }
 
@@ -40,13 +42,27 @@ impl ACPClient {
         self.messages.write().await.clear();
     }
 
-    async fn add_message(&self, role: &str, content: String) {
+    async fn add_message(&self, role: &str, message_type: MessageType, content: String) {
+        let mut messages = self.messages.write().await;
+        let mut current_type = self.current_message_type.write().await;
+        
+        if let Some(ref last_type) = *current_type {
+            if last_type == &message_type {
+                if let Some(last_message) = messages.last_mut() {
+                    last_message.content.push_str(&content);
+                    return;
+                }
+            }
+        }
+        
+        *current_type = Some(message_type.clone());
         let message = AgentMessage {
             timestamp: Utc::now(),
             role: role.to_string(),
+            message_type,
             content,
         };
-        self.messages.write().await.push(message);
+        messages.push(message);
     }
 
     fn resolve_path(&self, path: &PathBuf) -> PathBuf {
@@ -118,10 +134,10 @@ impl acp::Client for ACPClient {
                         };
                         trace!(content_preview = %preview, "Agent message chunk");
                         print!("{}", text.text);
-                        self.add_message("assistant", text.text.clone()).await;
+                        self.add_message("assistant", MessageType::Text, text.text.clone()).await;
                     }
                     acp::ContentBlock::Image(img) => {
-                        self.add_message("assistant", format!("[Image: {}]", img.mime_type)).await;
+                        self.add_message("assistant", MessageType::Image, format!("[Image: {}]", img.mime_type)).await;
                     }
                     acp::ContentBlock::Resource(res) => {
                         let uri = match &res.resource {
@@ -133,7 +149,7 @@ impl acp::Client for ACPClient {
                             }
                             _ => "unknown".to_string(),
                         };
-                        self.add_message("assistant", format!("[Resource: {}]", uri)).await;
+                        self.add_message("assistant", MessageType::Resource, format!("[Resource: {}]", uri)).await;
                     }
                     _ => {}
                 }
@@ -144,7 +160,7 @@ impl acp::Client for ACPClient {
                     "Tool call initiated"
                 );
                 let tool_info = format!("[Tool Call: {} - {}]", update.title, update.tool_call_id);
-                self.add_message("assistant", tool_info).await;
+                self.add_message("assistant", MessageType::ToolCall, tool_info).await;
             }
             acp::SessionUpdate::ToolCallUpdate(update) => {
                 debug!(
@@ -162,7 +178,7 @@ impl acp::Client for ACPClient {
                     .map(|e| format!("- {}", e.content))
                     .collect::<Vec<_>>()
                     .join("\n");
-                self.add_message("assistant", format!("[Plan]\n{}", plan_content)).await;
+                self.add_message("assistant", MessageType::Plan, format!("[Plan]\n{}", plan_content)).await;
             }
             acp::SessionUpdate::CurrentModeUpdate(update) => {
                 info!(mode_id = %update.current_mode_id, "Session mode changed");
@@ -177,14 +193,14 @@ impl acp::Client for ACPClient {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
                     let preview: String = text.text.chars().take(50).collect();
                     trace!(thought_preview = %preview, "Agent thought");
-                    self.add_message("assistant", format!("[Thought] {}", text.text)).await;
+                    self.add_message("assistant", MessageType::Thought, text.text.clone()).await;
                 }
             }
             acp::SessionUpdate::UserMessageChunk(chunk) => {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
                     let preview: String = text.text.chars().take(50).collect();
                     trace!(message_preview = %preview, "User message");
-                    self.add_message("user", text.text.clone()).await;
+                    self.add_message("user", MessageType::UserMessage, text.text.clone()).await;
                 }
             }
             _ => {

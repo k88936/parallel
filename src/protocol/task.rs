@@ -108,10 +108,23 @@ pub struct Task {
     pub claimed_by: Option<Uuid>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MessageType {
+    Thought,
+    Text,
+    ToolCall,
+    ToolResult,
+    Image,
+    Resource,
+    Plan,
+    UserMessage,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessage {
     pub timestamp: DateTime<Utc>,
     pub role: String,
+    pub message_type: MessageType,
     pub content: String,
 }
 
