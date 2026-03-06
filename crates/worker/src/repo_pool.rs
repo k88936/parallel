@@ -70,23 +70,40 @@ impl RepoPool {
         let slot_id = repo_slots.len() as u32;
         let slot_path = repo_dir.join(slot_id.to_string());
 
-        info!(
-            "Creating new slot {} for repo {}, task {}",
-            slot_id, repo_hash, task_id
-        );
-
-        tokio::fs::create_dir_all(&repo_dir)
-            .await
-            .context("Failed to create repo directory")?;
+        let slot_exists = slot_path.exists() && slot_path.join(".git").exists();
 
         drop(slots);
 
-        GitOps::clone(repo_url, base_branch, &slot_path, ssh_key)?;
+        if slot_exists {
+            info!(
+                "Reusing existing slot {} on disk for repo {}, task {}",
+                slot_id, repo_hash, task_id
+            );
 
-        let git = GitOps {
-            repo_path: slot_path.clone(),
-        };
-        git.create_branch(target_branch)?;
+            let git = GitOps {
+                repo_path: slot_path.clone(),
+            };
+            git.fetch(ssh_key)?;
+            git.force_checkout(base_branch)?;
+            git.delete_branch_if_exists(target_branch)?;
+            git.create_branch(target_branch)?;
+        } else {
+            info!(
+                "Creating new slot {} for repo {}, task {}",
+                slot_id, repo_hash, task_id
+            );
+
+            tokio::fs::create_dir_all(&repo_dir)
+                .await
+                .context("Failed to create repo directory")?;
+
+            GitOps::clone(repo_url, base_branch, &slot_path, ssh_key)?;
+
+            let git = GitOps {
+                repo_path: slot_path.clone(),
+            };
+            git.create_branch(target_branch)?;
+        }
 
         let mut slots = self.slots.write().await;
         let repo_slots = slots.get_mut(&repo_hash).context("Repo slots not found")?;

@@ -147,4 +147,51 @@ impl WorkerService {
 
         Ok(serde_json::from_str(&worker.current_tasks_json)?)
     }
+
+    pub async fn update_status(&self, worker_id: &Uuid, status: WorkerStatus) -> ServerResult<()> {
+        let worker = workers::Entity::find_by_id(*worker_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| ServerError::WorkerNotFound(*worker_id))?;
+
+        let mut worker: workers::ActiveModel = worker.into();
+        worker.status = Set(status.as_str().to_string());
+        worker.update(&self.db).await?;
+
+        Ok(())
+    }
+
+    pub async fn find_stale_workers(&self, timeout_seconds: i64) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
+        let cutoff = Utc::now() - chrono::Duration::seconds(timeout_seconds);
+        
+        let stale_workers = workers::Entity::find()
+            .filter(workers::Column::LastHeartbeat.lt(cutoff))
+            .filter(workers::Column::Status.ne(WorkerStatus::Offline.as_str()))
+            .filter(workers::Column::Status.ne(WorkerStatus::Dead.as_str()))
+            .all(&self.db)
+            .await?;
+
+        let result: Vec<(Uuid, Vec<Uuid>)> = stale_workers
+            .into_iter()
+            .map(|w| {
+                let tasks: Vec<Uuid> = serde_json::from_str(&w.current_tasks_json).unwrap_or_default();
+                (w.id, tasks)
+            })
+            .collect();
+
+        Ok(result)
+    }
+
+    pub async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()> {
+        let worker = workers::Entity::find_by_id(*worker_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| ServerError::WorkerNotFound(*worker_id))?;
+
+        let mut worker: workers::ActiveModel = worker.into();
+        worker.current_tasks_json = Set("[]".to_string());
+        worker.update(&self.db).await?;
+
+        Ok(())
+    }
 }

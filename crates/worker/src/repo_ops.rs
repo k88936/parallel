@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
@@ -55,7 +56,6 @@ impl GitOps {
                 "clone",
                 "-b",
                 base_branch,
-                "--single-branch",
                 repo_url,
                 target_dir.to_str().unwrap(),
             ])

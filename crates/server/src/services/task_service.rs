@@ -218,4 +218,37 @@ impl TaskService {
             ssh_key: t.ssh_key,
         }))
     }
+
+    pub async fn requeue_task(&self, task_id: &Uuid) -> ServerResult<()> {
+        let now = Utc::now();
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| ServerError::TaskNotFound(*task_id))?;
+
+        let current_status = TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created);
+        
+        if !matches!(current_status, TaskStatus::InProgress | TaskStatus::Claimed | TaskStatus::AwaitingReview) {
+            return Ok(());
+        }
+
+        let mut task: tasks::ActiveModel = task.into();
+        task.status = Set(TaskStatus::Queued.as_str().to_string());
+        task.claimed_by = Set(None);
+        task.updated_at = Set(now);
+        task.update(&self.db).await?;
+
+        Ok(())
+    }
+
+    pub async fn requeue_tasks(&self, task_ids: &[Uuid]) -> ServerResult<usize> {
+        let mut count = 0;
+        for task_id in task_ids {
+            match self.requeue_task(task_id).await {
+                Ok(()) => count += 1,
+                Err(_) => continue,
+            }
+        }
+        Ok(count)
+    }
 }

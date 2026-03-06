@@ -16,6 +16,7 @@ use tracing::info;
 
 use db::migration::Migrator;
 use handlers::{task, worker};
+use services::spawn_heartbeat_monitor;
 use state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
@@ -26,6 +27,18 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     Migrator::up(&db, None).await?;
 
     let state = AppState::new(db);
+
+    let heartbeat_timeout: i64 = std::env::var("HEARTBEAT_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+    
+    let heartbeat_interval: u64 = std::env::var("HEARTBEAT_CHECK_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+
+    spawn_heartbeat_monitor(state.clone(), heartbeat_timeout, heartbeat_interval);
 
     let app = Router::new()
         .route("/api/tasks", post(task::create_task))

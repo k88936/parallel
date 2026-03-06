@@ -219,6 +219,8 @@ cargo test
 ### Server
 - `DATABASE_URL`: SQLite connection string (default: `sqlite://./data.db?mode=rwc`)
 - `PORT`: Server port (default: 3000)
+- `HEARTBEAT_TIMEOUT_SECONDS`: Seconds before marking worker as Offline (default: 30)
+- `HEARTBEAT_CHECK_INTERVAL_SECONDS`: Interval for heartbeat monitor checks (default: 10)
 
 ### Worker
 - `SERVER_URL`: Server API endpoint (default: `http://localhost:3000`)

@@ -8,6 +8,7 @@ pub enum WorkerStatus {
     Idle,
     Busy,
     Offline,
+    Dead,
 }
 
 impl WorkerStatus {
@@ -16,6 +17,7 @@ impl WorkerStatus {
             WorkerStatus::Idle => "idle",
             WorkerStatus::Busy => "busy",
             WorkerStatus::Offline => "offline",
+            WorkerStatus::Dead => "dead",
         }
     }
 
@@ -24,6 +26,7 @@ impl WorkerStatus {
             "idle" => Some(WorkerStatus::Idle),
             "busy" => Some(WorkerStatus::Busy),
             "offline" => Some(WorkerStatus::Offline),
+            "dead" => Some(WorkerStatus::Dead),
             _ => None,
         }
     }
