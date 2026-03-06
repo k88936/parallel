@@ -293,7 +293,6 @@ impl Worker {
             task.id,
             task.description.clone(),
             workdir,
-            task.target_branch.clone(),
         );
 
         runner

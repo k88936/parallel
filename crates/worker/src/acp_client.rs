@@ -313,7 +313,7 @@ impl acp::Client for ACPClient {
         Ok(acp::KillTerminalCommandResponse::new())
     }
 
-    async fn ext_method(&self, args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
+    async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
         Err(acp::Error::method_not_found())
     }
 

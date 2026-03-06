@@ -3,7 +3,7 @@ use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
-use parallel_protocol::{Task, TaskPriority, TaskStatus, HumanFeedback, ReviewData};
+use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
 
 use crate::db::entity::tasks;
 use crate::errors::{ServerError, ServerResult};

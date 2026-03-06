@@ -1,11 +1,9 @@
-use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
 use parallel_protocol::{TaskStatus, WorkerEvent, ReviewData};
 
-use crate::db::entity::{tasks, workers};
-use crate::errors::{ServerError, ServerResult};
+use crate::errors::{ServerResult};
 use crate::services::{TaskService, WorkerService};
 
 pub struct EventProcessor {

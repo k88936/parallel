@@ -23,7 +23,6 @@ pub struct TaskRunner {
     task_id: uuid::Uuid,
     task_description: String,
     workdir: PathBuf,
-    branch_name: String,
 }
 
 impl TaskRunner {
@@ -31,13 +30,11 @@ impl TaskRunner {
         task_id: uuid::Uuid,
         task_description: String,
         workdir: PathBuf,
-        branch_name: String,
     ) -> Self {
         Self {
             task_id,
             task_description,
             workdir,
-            branch_name,
         }
     }
 
