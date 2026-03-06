@@ -25,6 +25,7 @@ impl TaskService {
         target_branch: String,
         priority: TaskPriority,
         ssh_key: String,
+        max_execution_time: i64,
     ) -> Result<Uuid> {
         let task_id = Uuid::new_v4();
         let now = Utc::now();
@@ -42,6 +43,7 @@ impl TaskService {
             claimed_by: Set(None),
             review_data_json: Set(None),
             ssh_key: Set(ssh_key),
+            max_execution_time: Set(max_execution_time),
         };
 
         tasks::Entity::insert(task).exec(&self.db).await?;
@@ -67,6 +69,7 @@ impl TaskService {
             updated_at: task.updated_at,
             claimed_by: task.claimed_by,
             ssh_key: task.ssh_key,
+            max_execution_time: task.max_execution_time,
         })
     }
 
@@ -103,6 +106,7 @@ impl TaskService {
                 updated_at: task.updated_at,
                 claimed_by: task.claimed_by,
                 ssh_key: task.ssh_key,
+                max_execution_time: task.max_execution_time,
             });
         }
 
@@ -216,6 +220,7 @@ impl TaskService {
             updated_at: t.updated_at,
             claimed_by: t.claimed_by,
             ssh_key: t.ssh_key,
+            max_execution_time: t.max_execution_time,
         }))
     }
 
@@ -250,5 +255,93 @@ impl TaskService {
             }
         }
         Ok(count)
+    }
+
+    pub async fn find_orphaned_tasks(&self) -> ServerResult<Vec<Task>> {
+        let non_terminal_statuses = vec![
+            TaskStatus::InProgress.as_str(),
+            TaskStatus::Claimed.as_str(),
+            TaskStatus::AwaitingReview.as_str(),
+            TaskStatus::PendingRework.as_str(),
+        ];
+
+        let tasks = tasks::Entity::find()
+            .filter(tasks::Column::Status.is_in(non_terminal_statuses))
+            .filter(tasks::Column::ClaimedBy.is_null())
+            .all(&self.db)
+            .await?;
+
+        let result: Vec<Task> = tasks
+            .into_iter()
+            .map(|t| Task {
+                id: t.id,
+                repo_url: t.repo_url,
+                description: t.description,
+                base_branch: t.base_branch,
+                target_branch: t.target_branch,
+                status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
+                priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
+                created_at: t.created_at,
+                updated_at: t.updated_at,
+                claimed_by: t.claimed_by,
+                ssh_key: t.ssh_key,
+                max_execution_time: t.max_execution_time,
+            })
+            .collect();
+
+        Ok(result)
+    }
+
+    pub async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>> {
+        let now = Utc::now();
+        let active_statuses = vec![
+            TaskStatus::InProgress.as_str(),
+            TaskStatus::Claimed.as_str(),
+        ];
+
+        let tasks = tasks::Entity::find()
+            .filter(tasks::Column::Status.is_in(active_statuses))
+            .all(&self.db)
+            .await?;
+
+        let result: Vec<Task> = tasks
+            .into_iter()
+            .filter(|t| {
+                let elapsed = (now - t.created_at).num_seconds();
+                elapsed > t.max_execution_time
+            })
+            .map(|t| Task {
+                id: t.id,
+                repo_url: t.repo_url,
+                description: t.description,
+                base_branch: t.base_branch,
+                target_branch: t.target_branch,
+                status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
+                priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
+                created_at: t.created_at,
+                updated_at: t.updated_at,
+                claimed_by: t.claimed_by,
+                ssh_key: t.ssh_key,
+                max_execution_time: t.max_execution_time,
+            })
+            .collect();
+
+        Ok(result)
+    }
+
+    pub async fn fail_task(&self, task_id: &Uuid, _reason: &str) -> ServerResult<()> {
+        let now = Utc::now();
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| ServerError::TaskNotFound(*task_id))?;
+
+        let mut task: tasks::ActiveModel = task.into();
+        task.status = Set(TaskStatus::Failed.as_str().to_string());
+        task.claimed_by = Set(None);
+        task.updated_at = Set(now);
+        task.update(&self.db).await?;
+
+        Ok(())
     }
 }

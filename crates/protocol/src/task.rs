@@ -91,4 +91,5 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
     pub claimed_by: Option<Uuid>,
     pub ssh_key: String,
+    pub max_execution_time: i64,
 }

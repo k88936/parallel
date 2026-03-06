@@ -20,6 +20,7 @@ pub async fn create_task(
         format!("task/{}", Uuid::new_v4())
     });
     let priority = payload.priority.unwrap_or_default();
+    let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
     let task_service = TaskService::new(state.db.clone());
 
@@ -31,6 +32,7 @@ pub async fn create_task(
             target_branch,
             priority,
             payload.ssh_key,
+            max_execution_time,
         )
         .await
     {

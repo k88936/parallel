@@ -54,6 +54,7 @@ export interface Task {
     created_at: string;
     updated_at: string;
     claimed_by: string | null;
+    max_execution_time: number;
 }
 
 export interface CreateTaskRequest {
@@ -63,6 +64,7 @@ export interface CreateTaskRequest {
     target_branch?: string;
     priority?: TaskPriority;
     ssh_key:string;
+    max_execution_time?: number;
 }
 
 export interface CreateTaskResponse {

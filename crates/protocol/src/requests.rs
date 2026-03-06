@@ -11,6 +11,7 @@ pub struct CreateTaskRequest {
     pub target_branch: Option<String>,
     pub priority: Option<TaskPriority>,
     pub ssh_key: String,
+    pub max_execution_time: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

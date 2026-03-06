@@ -16,7 +16,7 @@ use tracing::info;
 
 use db::migration::Migrator;
 use handlers::{task, worker};
-use services::spawn_heartbeat_monitor;
+use services::{spawn_heartbeat_monitor, spawn_orphan_monitor};
 use state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
@@ -38,7 +38,13 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(10);
 
+    let orphan_check_interval: u64 = std::env::var("ORPHAN_CHECK_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+
     spawn_heartbeat_monitor(state.clone(), heartbeat_timeout, heartbeat_interval);
+    spawn_orphan_monitor(state.clone(), orphan_check_interval);
 
     let app = Router::new()
         .route("/api/tasks", post(task::create_task))

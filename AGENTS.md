@@ -71,7 +71,9 @@ crates/server/src/
 ├── services/           # Business logic layer
 │   ├── coordinator.rs  # Task distribution logic
 │   ├── task_service.rs # Task operations
-│   └── worker_service.rs # Worker management
+│   ├── worker_service.rs # Worker management
+│   ├── heartbeat_monitor.rs # Worker health monitoring
+│   └── orphan_monitor.rs    # Orphan task detection
 ├── state.rs            # Application state (DB connection pool)
 └── errors.rs           # Error types and handling
 ```
@@ -137,6 +139,15 @@ web/
 4. Worker executes and reports events (`POST /api/workers/events`)
 5. Worker updates task status (`POST /api/tasks/:id/status`)
 
+### Orphan Detection and Timeout Management
+The server runs periodic background tasks to ensure task reliability:
+
+**Orphan Detection**: Tasks in non-terminal states (InProgress, Claimed, AwaitingReview, PendingRework) with no active worker are automatically detected and re-queued.
+
+**Timeout Management**: Tasks that exceed their `max_execution_time` are automatically marked as Failed. The timeout is measured from task creation.
+
+Both monitors run at configurable intervals (see Environment Variables).
+
 ## Key Types
 
 ### Task Status (`crates/protocol/src/task.rs:7`)
@@ -169,6 +180,7 @@ struct Task {
     updated_at: DateTime<Utc>,
     claimed_by: Option<Uuid>,
     ssh_key: String,
+    max_execution_time: i64,
 }
 ```
 
@@ -221,6 +233,7 @@ cargo test
 - `PORT`: Server port (default: 3000)
 - `HEARTBEAT_TIMEOUT_SECONDS`: Seconds before marking worker as Offline (default: 30)
 - `HEARTBEAT_CHECK_INTERVAL_SECONDS`: Interval for heartbeat monitor checks (default: 10)
+- `ORPHAN_CHECK_INTERVAL_SECONDS`: Interval for orphan task detection (default: 60)
 
 ### Worker
 - `SERVER_URL`: Server API endpoint (default: `http://localhost:3000`)

@@ -17,6 +17,7 @@ pub struct Model {
     pub claimed_by: Option<Uuid>,
     pub review_data_json: Option<String>,
     pub ssh_key: String,
+    pub max_execution_time: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
