@@ -35,43 +35,50 @@ pub async fn poll_instructions(
     let worker_service = WorkerService::new(state.db.clone());
     let task_service = TaskService::new(state.db.clone());
 
-    match coordinator.get_pending_instructions(&payload.worker_id).await {
-        Ok(mut instructions) => {
-            if instructions.is_empty() {
-                match worker_service.has_available_slot(&payload.worker_id).await {
-                    Ok(true) => {
-                        if let Ok(Some(task)) = task_service.get_next_queued().await {
-                            match worker_service.add_task(&payload.worker_id, task.id).await {
-                                Ok(()) => {
-                                    if let Err(e) = task_service
-                                        .set_claimed_by(&task.id, Some(payload.worker_id))
-                                        .await
-                                    {
-                                        tracing::error!("Failed to set claimed_by: {}", e);
-                                    } else {
-                                        instructions.push(WorkerInstruction::AssignTask { task });
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to add task to worker: {}", e);
-                                }
-                            }
-                        }
-                    }
-                    Ok(false) => {}
-                    Err(e) => {
-                        tracing::error!("Failed to check available slot: {}", e);
-                    }
-                }
-            }
-
-            Ok(Json(PollResponse { instructions }))
-        }
+    let mut instructions = match coordinator.get_pending_instructions(&payload.worker_id).await {
+        Ok(instructions) => instructions,
         Err(e) => {
             tracing::error!("Failed to poll instructions: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
+    };
+
+    if !instructions.is_empty() {
+        return Ok(Json(PollResponse { instructions }));
     }
+
+    let has_slot = match worker_service.has_available_slot(&payload.worker_id).await {
+        Ok(has_slot) => has_slot,
+        Err(e) => {
+            tracing::error!("Failed to check available slot: {}", e);
+            return Ok(Json(PollResponse { instructions }));
+        }
+    };
+
+    if !has_slot {
+        return Ok(Json(PollResponse { instructions }));
+    }
+
+    let Some(task) = task_service.get_next_queued().await.ok().flatten() else {
+        return Ok(Json(PollResponse { instructions }));
+    };
+
+    if let Err(e) = worker_service.add_task(&payload.worker_id, task.id).await {
+        tracing::error!("Failed to add task to worker: {}", e);
+        return Ok(Json(PollResponse { instructions }));
+    }
+
+    if let Err(e) = task_service
+        .set_claimed_by(&task.id, Some(payload.worker_id))
+        .await
+    {
+        tracing::error!("Failed to set claimed_by: {}", e);
+        return Ok(Json(PollResponse { instructions }));
+    }
+
+    instructions.push(WorkerInstruction::AssignTask { task });
+
+    Ok(Json(PollResponse { instructions }))
 }
 
 pub async fn push_events(
