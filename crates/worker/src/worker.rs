@@ -10,11 +10,11 @@ use tracing::{error, info, warn};
 use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInstruction};
 
 use crate::api_client::APIClient;
-use crate::repo_ops::GitOps;
-use crate::repo_pool::RepoPool;
-use crate::task_runner::TaskRunner;
+use crate::repo::repo_ops::GitOps;
+use crate::repo::repo_pool::RepoPool;
+use crate::code::task_runner::TaskRunner;
 
-use crate::task_runner::TaskInstruction;
+use crate::code::task_runner::TaskInstruction;
 
 struct RunningTask {
     cancel_token: CancellationToken,

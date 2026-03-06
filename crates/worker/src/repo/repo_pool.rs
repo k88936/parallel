@@ -5,8 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 use uuid::Uuid;
-
-use crate::repo_ops::GitOps;
+use crate::repo::repo_ops::GitOps;
 
 struct RepoSlot {
     slot_id: u32,

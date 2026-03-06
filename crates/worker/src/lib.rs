@@ -1,7 +1,6 @@
-pub mod acp_client;
-pub mod api_client;
-pub mod repo_ops;
-pub mod repo_pool;
-pub mod task_runner;
+mod api_client;
+mod code;
+mod repo;
 pub mod worker;
+
 pub use worker::Worker;

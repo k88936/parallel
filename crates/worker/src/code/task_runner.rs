@@ -12,8 +12,8 @@ use agent_client_protocol::{
 
 use parallel_protocol::{HumanFeedback, WorkerEvent};
 
-use crate::acp_client::ACPClient;
-use crate::repo_ops::GitOps;
+use crate::code::acp_client::ACPClient;
+use crate::repo::repo_ops::GitOps;
 
 pub enum TaskInstruction {
     Approve,
