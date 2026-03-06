@@ -30,6 +30,7 @@ pub async fn create_task(
             base_branch,
             target_branch,
             priority,
+            payload.ssh_key,
         )
         .await
     {

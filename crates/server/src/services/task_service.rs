@@ -24,6 +24,7 @@ impl TaskService {
         base_branch: String,
         target_branch: String,
         priority: TaskPriority,
+        ssh_key: String,
     ) -> Result<Uuid> {
         let task_id = Uuid::new_v4();
         let now = Utc::now();
@@ -40,6 +41,7 @@ impl TaskService {
             updated_at: Set(now),
             claimed_by: Set(None),
             review_data_json: Set(None),
+            ssh_key: Set(ssh_key),
         };
 
         tasks::Entity::insert(task).exec(&self.db).await?;
@@ -64,6 +66,7 @@ impl TaskService {
             created_at: task.created_at,
             updated_at: task.updated_at,
             claimed_by: task.claimed_by,
+            ssh_key: task.ssh_key,
         })
     }
 
@@ -99,6 +102,7 @@ impl TaskService {
                 created_at: task.created_at,
                 updated_at: task.updated_at,
                 claimed_by: task.claimed_by,
+                ssh_key: task.ssh_key,
             });
         }
 
@@ -211,6 +215,7 @@ impl TaskService {
             created_at: t.created_at,
             updated_at: t.updated_at,
             claimed_by: t.claimed_by,
+            ssh_key: t.ssh_key,
         }))
     }
 }

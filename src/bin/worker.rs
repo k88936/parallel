@@ -30,12 +30,6 @@ async fn main() -> anyhow::Result<()> {
                 .map(|h| h.to_string_lossy().to_string())
                 .unwrap_or_else(|_| "unknown".to_string()))
         });
-    let ssh_key_path = PathBuf::from(
-        env::var("SSH_KEY_PATH").unwrap_or_else(|_| {
-            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-            format!("{}/.ssh/id_rsa", home)
-        })
-    );
     let max_concurrent = env::var("MAX_CONCURRENT")
         .map(|v| v.parse().unwrap_or(4))
         .unwrap_or(4);
@@ -44,7 +38,6 @@ async fn main() -> anyhow::Result<()> {
         work_base = %work_base.display(),
         server_url = %server_url,
         worker_name = %worker_name,
-        ssh_key = %ssh_key_path.display(),
         max_concurrent = max_concurrent,
         "Worker configuration loaded"
     );
@@ -53,7 +46,6 @@ async fn main() -> anyhow::Result<()> {
         work_base,
         max_concurrent,
         server_url,
-        ssh_key_path,
     );
 
     info!("Registering worker with server...");

@@ -4,6 +4,7 @@ mod m20240305_000001_create_tasks;
 mod m20240305_000002_create_workers;
 mod m20240306_000003_update_workers_for_instructions;
 mod m20240306_000004_add_review_data_to_tasks;
+mod m20240307_000005_add_ssh_key_to_tasks;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240305_000002_create_workers::Migration),
             Box::new(m20240306_000003_update_workers_for_instructions::Migration),
             Box::new(m20240306_000004_add_review_data_to_tasks::Migration),
+            Box::new(m20240307_000005_add_ssh_key_to_tasks::Migration),
         ]
     }
 }

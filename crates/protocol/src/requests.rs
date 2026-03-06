@@ -10,6 +10,7 @@ pub struct CreateTaskRequest {
     pub base_branch: Option<String>,
     pub target_branch: Option<String>,
     pub priority: Option<TaskPriority>,
+    pub ssh_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -22,11 +22,9 @@ struct RunningTask {
 }
 
 pub struct Worker {
-    work_base: PathBuf,
     max_concurrent: usize,
     api_client: Arc<APIClient>,
     worker_id: uuid::Uuid,
-    ssh_key_path: PathBuf,
     running_tasks: Arc<RwLock<HashMap<uuid::Uuid, RunningTask>>>,
     repo_pool: Arc<RepoPool>,
 }
@@ -36,17 +34,14 @@ impl Worker {
         work_base: PathBuf,
         max_concurrent: usize,
         server_url: String,
-        ssh_key_path: PathBuf,
     ) -> Self {
         let repo_pool_base = work_base.join("repos");
-        let repo_pool = Arc::new(RepoPool::new(repo_pool_base, ssh_key_path.clone()));
+        let repo_pool = Arc::new(RepoPool::new(repo_pool_base));
 
         Self {
-            work_base,
             max_concurrent,
             api_client: Arc::new(APIClient::new(server_url)),
             worker_id: uuid::Uuid::nil(),
-            ssh_key_path,
             running_tasks: Arc::new(RwLock::new(HashMap::new())),
             repo_pool,
         }
@@ -171,8 +166,6 @@ impl Worker {
                     running.insert(task_id, running_task);
                 }
 
-                let _work_base = self.work_base.clone();
-                let ssh_key_path = self.ssh_key_path.clone();
                 let running_tasks = self.running_tasks.clone();
                 let repo_pool = self.repo_pool.clone();
 
@@ -187,7 +180,6 @@ impl Worker {
 
                         let result = Self::execute_task(
                             &task,
-                            &ssh_key_path,
                             cancel_token,
                             instruction_rx,
                             event_tx.clone(),
@@ -273,7 +265,6 @@ impl Worker {
 
     async fn execute_task(
         task: &ProtocolTask,
-        ssh_key_path: &PathBuf,
         cancel_token: CancellationToken,
         instruction_rx: mpsc::Receiver<TaskInstruction>,
         event_tx: mpsc::Sender<WorkerEvent>,
@@ -286,9 +277,10 @@ impl Worker {
                 task.id,
                 &task.base_branch,
                 &task.target_branch,
+                &task.ssh_key,
             )
             .await
-            .context("Failed to acquire repo slot")?;
+            .context("Failed to create task directory")?;
 
         if cancel_token.is_cancelled() {
             let _ = repo_pool.release_slot(&task.repo_url, task.id).await;
@@ -310,7 +302,7 @@ impl Worker {
             };
             git.add_all()?;
             git.commit(&format!("Implement: {}", task.description))?;
-            git.push(&task.target_branch, ssh_key_path)?;
+            git.push(&task.target_branch, &task.ssh_key)?;
         }
 
         if let Err(e) = repo_pool.release_slot(&task.repo_url, task.id).await {

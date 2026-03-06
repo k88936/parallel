@@ -168,6 +168,7 @@ struct Task {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     claimed_by: Option<Uuid>,
+    ssh_key: String,
 }
 ```
 
@@ -187,7 +188,6 @@ cargo run --bin worker
 SERVER_URL="http://localhost:3000" \
 WORKER_NAME="worker-1" \
 WORKER_WORK_BASE="./work" \
-SSH_KEY_PATH="$HOME/.ssh/id_rsa" \
 MAX_CONCURRENT=4 \
 cargo run --bin worker
 ```
@@ -224,7 +224,6 @@ cargo test
 - `SERVER_URL`: Server API endpoint (default: `http://localhost:3000`)
 - `WORKER_NAME`: Unique worker identifier (default: `worker-{hostname}`)
 - `WORKER_WORK_BASE`: Base directory for task execution (default: `./work`)
-- `SSH_KEY_PATH`: SSH key for Git operations (default: `$HOME/.ssh/id_rsa`)
 - `MAX_CONCURRENT`: Max concurrent tasks per worker (default: 4)
 
 ## API Endpoints

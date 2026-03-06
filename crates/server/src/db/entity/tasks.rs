@@ -16,6 +16,7 @@ pub struct Model {
     pub updated_at: DateTimeUtc,
     pub claimed_by: Option<Uuid>,
     pub review_data_json: Option<String>,
+    pub ssh_key: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

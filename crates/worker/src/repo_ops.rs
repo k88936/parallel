@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -6,8 +7,38 @@ pub struct GitOps {
     pub repo_path: std::path::PathBuf,
 }
 
+fn write_ssh_key_to_temp(ssh_key: &str) -> Result<std::path::PathBuf> {
+    let temp_dir = std::env::temp_dir();
+    let key_path = temp_dir.join(format!("parallel_ssh_key_{}", uuid::Uuid::new_v4()));
+
+    let mut file =
+        std::fs::File::create(&key_path).context("Failed to create temp SSH key file")?;
+    file.write_all(ssh_key.as_bytes())
+        .context("Failed to write SSH key to temp file")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+            .context("Failed to set SSH key file permissions")?;
+    }
+    Ok(key_path)
+}
+
 impl GitOps {
     pub fn clone(
+        repo_url: &str,
+        base_branch: &str,
+        target_dir: &Path,
+        ssh_key: &str,
+    ) -> Result<Self> {
+        let key_path = write_ssh_key_to_temp(ssh_key)?;
+        let result = Self::clone_internal(repo_url, base_branch, target_dir, &key_path);
+        let _ = std::fs::remove_file(&key_path);
+        result
+    }
+
+    fn clone_internal(
         repo_url: &str,
         base_branch: &str,
         target_dir: &Path,
@@ -89,7 +120,14 @@ impl GitOps {
         Ok(())
     }
 
-    pub fn push(&self, branch_name: &str, ssh_key_path: &Path) -> Result<()> {
+    pub fn push(&self, branch_name: &str, ssh_key: &str) -> Result<()> {
+        let key_path = write_ssh_key_to_temp(ssh_key)?;
+        let result = self.push_internal(branch_name, &key_path);
+        let _ = std::fs::remove_file(&key_path);
+        result
+    }
+
+    fn push_internal(&self, branch_name: &str, ssh_key_path: &Path) -> Result<()> {
         let ssh_cmd = format!(
             "ssh -i {} -o StrictHostKeyChecking=no",
             ssh_key_path.display()
@@ -119,7 +157,15 @@ impl GitOps {
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
-    pub fn fetch(&self, ssh_key_path: &Path) -> Result<()> {
+
+    pub fn fetch(&self, ssh_key: &str) -> Result<()> {
+        let key_path = write_ssh_key_to_temp(ssh_key)?;
+        let result = self.fetch_internal(&key_path);
+        let _ = std::fs::remove_file(&key_path);
+        result
+    }
+
+    fn fetch_internal(&self, ssh_key_path: &Path) -> Result<()> {
         let ssh_cmd = format!(
             "ssh -i {} -o StrictHostKeyChecking=no",
             ssh_key_path.display()

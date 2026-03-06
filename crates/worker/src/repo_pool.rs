@@ -16,15 +16,13 @@ struct RepoSlot {
 
 pub struct RepoPool {
     base_path: PathBuf,
-    ssh_key_path: PathBuf,
     slots: Arc<RwLock<HashMap<String, Vec<RepoSlot>>>>,
 }
 
 impl RepoPool {
-    pub fn new(base_path: PathBuf, ssh_key_path: PathBuf) -> Self {
+    pub fn new(base_path: PathBuf) -> Self {
         Self {
             base_path,
-            ssh_key_path,
             slots: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -42,6 +40,7 @@ impl RepoPool {
         task_id: Uuid,
         base_branch: &str,
         target_branch: &str,
+        ssh_key: &str,
     ) -> Result<PathBuf> {
         let repo_hash = Self::hash_repo_url(repo_url);
         let repo_dir = self.base_path.join(&repo_hash);
@@ -62,7 +61,7 @@ impl RepoPool {
                 slot_id, repo_hash, task_id
             );
 
-            self.prepare_existing_slot(&slot_path, base_branch, target_branch)
+            self.prepare_existing_slot(&slot_path, base_branch, target_branch, ssh_key)
                 .await?;
 
             return Ok(slot_path);
@@ -82,7 +81,7 @@ impl RepoPool {
 
         drop(slots);
 
-        GitOps::clone(repo_url, base_branch, &slot_path, &self.ssh_key_path)?;
+        GitOps::clone(repo_url, base_branch, &slot_path, ssh_key)?;
 
         let git = GitOps {
             repo_path: slot_path.clone(),
@@ -105,12 +104,13 @@ impl RepoPool {
         slot_path: &Path,
         base_branch: &str,
         target_branch: &str,
+        ssh_key: &str,
     ) -> Result<()> {
         let git = GitOps {
             repo_path: slot_path.to_path_buf(),
         };
 
-        git.fetch(&self.ssh_key_path)?;
+        git.fetch(ssh_key)?;
 
         git.force_checkout(base_branch)?;
 
