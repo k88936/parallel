@@ -1,8 +1,7 @@
-'usesymotion-prefix) client';
-
 import {useState} from 'react';
 import type {CreateTaskRequest, TaskPriority} from '@/types/task';
 import {api} from '@/lib/api';
+import {sshKey} from "@/lib/sshKey";
 
 export function CreateTaskForm() {
     const [formData, setFormData] = useState<CreateTaskRequest>({
@@ -12,6 +11,7 @@ export function CreateTaskForm() {
         description: "",
         base_branch: 'main',
         priority: 'normal',
+        ssh_key: sshKey
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -23,12 +23,6 @@ export function CreateTaskForm() {
 
         try {
             await api.createTask(formData);
-            setFormData({
-                repo_url: '',
-                description: '',
-                base_branch: 'main',
-                priority: 'normal',
-            });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to create task');
         } finally {

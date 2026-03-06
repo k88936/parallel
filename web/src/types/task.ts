@@ -62,6 +62,7 @@ export interface CreateTaskRequest {
     base_branch?: string;
     target_branch?: string;
     priority?: TaskPriority;
+    ssh_key:string;
 }
 
 export interface CreateTaskResponse {
