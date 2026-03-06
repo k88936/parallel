@@ -15,9 +15,9 @@ pub async fn start_test_server() -> TestServer {
     let _lock = SERVER_LOCK.lock().await;
     
     let port = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
-    let database_url = format!("sqlite::memory:?cache=shared");
+    let database_url = "sqlite::memory:?cache=shared".to_string();
     
-    // Start server in background
+    // Start a server in the background
     let db_url = database_url.clone();
     tokio::spawn(async move {
         run_server(&db_url, port)
@@ -25,7 +25,7 @@ pub async fn start_test_server() -> TestServer {
             .expect("Server failed to start");
     });
 
-    // Wait for server to be ready
+    // Wait for the server to be ready
     let url = format!("http://localhost:{}", port);
     let client = reqwest::Client::new();
     
