@@ -3,17 +3,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerInstruction, WorkerEvent};
+use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInstruction};
 
 use crate::api_client::APIClient;
 use crate::repo_ops::GitOps;
-use crate::agent_runner::AgentRunner;
+use crate::task_runner::TaskRunner;
 
-use crate::agent_runner::TaskInstruction;
+use crate::task_runner::TaskInstruction;
 
 struct RunningTask {
     cancel_token: CancellationToken,
@@ -98,7 +98,10 @@ impl Worker {
                 if !pending_events.is_empty() {
                     let events_to_send = std::mem::take(&mut pending_events);
 
-                    match api_client.push_events(worker_id, events_to_send.clone()).await {
+                    match api_client
+                        .push_events(worker_id, events_to_send.clone())
+                        .await
+                    {
                         Ok(true) => {
                             pending_events.clear();
                         }
@@ -130,12 +133,19 @@ impl Worker {
         }
     }
 
-    async fn handle_instruction(&self, instruction: WorkerInstruction, event_tx: mpsc::Sender<WorkerEvent>) {
+    async fn handle_instruction(
+        &self,
+        instruction: WorkerInstruction,
+        event_tx: mpsc::Sender<WorkerEvent>,
+    ) {
         match instruction {
             WorkerInstruction::AssignTask { task } => {
                 let running = self.running_tasks.read().await;
                 if running.len() >= self.max_concurrent {
-                    warn!("Max concurrent tasks reached, cannot accept task {}", task.id);
+                    warn!(
+                        "Max concurrent tasks reached, cannot accept task {}",
+                        task.id
+                    );
                     return;
                 }
                 drop(running);
@@ -175,7 +185,8 @@ impl Worker {
                             cancel_token,
                             instruction_rx,
                             event_tx.clone(),
-                        ).await;
+                        )
+                        .await;
 
                         {
                             let mut running = running_tasks.write().await;
@@ -189,10 +200,12 @@ impl Worker {
                             }
                             Err(e) => {
                                 error!("Task {} failed: {}", task_id, e);
-                                let _ = event_tx.send(WorkerEvent::TaskFailed {
-                                    task_id,
-                                    error: e.to_string()
-                                }).await;
+                                let _ = event_tx
+                                    .send(WorkerEvent::TaskFailed {
+                                        task_id,
+                                        error: e.to_string(),
+                                    })
+                                    .await;
                             }
                         }
                     });
@@ -209,7 +222,10 @@ impl Worker {
                     warn!("Task {} not found in running tasks", task_id);
                 }
             }
-            WorkerInstruction::UpdateTask { task_id, instruction } => {
+            WorkerInstruction::UpdateTask {
+                task_id,
+                instruction,
+            } => {
                 info!("Received update for task {}: {}", task_id, instruction);
             }
             WorkerInstruction::ApproveIteration { task_id } => {
@@ -225,7 +241,10 @@ impl Worker {
                 info!("Received feedback for task {}", task_id);
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
-                    let _ = task.instruction_tx.send(TaskInstruction::Iterate { feedback }).await;
+                    let _ = task
+                        .instruction_tx
+                        .send(TaskInstruction::Iterate { feedback })
+                        .await;
                 } else {
                     warn!("Task {} not found for feedback", task_id);
                 }
@@ -234,7 +253,10 @@ impl Worker {
                 info!("Received abort for task {}: {}", task_id, reason);
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
-                    let _ = task.instruction_tx.send(TaskInstruction::Abort { reason }).await;
+                    let _ = task
+                        .instruction_tx
+                        .send(TaskInstruction::Abort { reason })
+                        .await;
                 } else {
                     warn!("Task {} not found for abort", task_id);
                 }
@@ -256,7 +278,7 @@ impl Worker {
             .context("Failed to create task directory")?;
 
         let repo_dir = task_dir.join("repo");
-        let git = GitOps::clone(&task.repo_url, &repo_dir, ssh_key_path)?;
+        let git = GitOps::clone(&task.repo_url, &task.base_branch, &repo_dir, ssh_key_path)?;
 
         if cancel_token.is_cancelled() {
             return Err(anyhow::anyhow!("Task cancelled before execution"));
@@ -267,14 +289,16 @@ impl Worker {
         let workdir = std::fs::canonicalize(&repo_dir)
             .context("Failed to resolve absolute path for workdir")?;
 
-        let runner = AgentRunner::new(
+        let runner = TaskRunner::new(
             task.id,
             task.description.clone(),
             workdir,
             task.target_branch.clone(),
         );
 
-        runner.run(cancel_token.clone(), event_tx.clone(), instruction_rx).await?;
+        runner
+            .run(cancel_token.clone(), event_tx.clone(), instruction_rx)
+            .await?;
 
         if !cancel_token.is_cancelled() {
             git.add_all()?;

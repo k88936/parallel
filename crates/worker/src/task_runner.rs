@@ -19,14 +19,14 @@ pub enum TaskInstruction {
     Abort { reason: String },
 }
 
-pub struct AgentRunner {
+pub struct TaskRunner {
     task_id: uuid::Uuid,
     task_description: String,
     workdir: PathBuf,
     branch_name: String,
 }
 
-impl AgentRunner {
+impl TaskRunner {
     pub fn new(
         task_id: uuid::Uuid,
         task_description: String,

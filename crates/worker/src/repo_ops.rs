@@ -7,7 +7,12 @@ pub struct GitOps {
 }
 
 impl GitOps {
-    pub fn clone(repo_url: &str, target_dir: &Path, ssh_key_path: &Path) -> Result<Self> {
+    pub fn clone(
+        repo_url: &str,
+        base_branch: &str,
+        target_dir: &Path,
+        ssh_key_path: &Path,
+    ) -> Result<Self> {
         let ssh_cmd = format!(
             "ssh -i {} -o StrictHostKeyChecking=no",
             ssh_key_path.display()
@@ -15,7 +20,14 @@ impl GitOps {
 
         let output = Command::new("git")
             .env("GIT_SSH_COMMAND", &ssh_cmd)
-            .args(["clone", repo_url, target_dir.to_str().unwrap()])
+            .args([
+                "clone",
+                "-b",
+                base_branch,
+                "--single-branch",
+                repo_url,
+                target_dir.to_str().unwrap(),
+            ])
             .output()
             .context("Failed to execute git clone")?;
 
