@@ -11,6 +11,7 @@ use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, W
 
 use crate::api_client::APIClient;
 use crate::repo_ops::GitOps;
+use crate::repo_pool::RepoPool;
 use crate::task_runner::TaskRunner;
 
 use crate::task_runner::TaskInstruction;
@@ -27,6 +28,7 @@ pub struct Worker {
     worker_id: uuid::Uuid,
     ssh_key_path: PathBuf,
     running_tasks: Arc<RwLock<HashMap<uuid::Uuid, RunningTask>>>,
+    repo_pool: Arc<RepoPool>,
 }
 
 impl Worker {
@@ -36,6 +38,9 @@ impl Worker {
         server_url: String,
         ssh_key_path: PathBuf,
     ) -> Self {
+        let repo_pool_base = work_base.join("repos");
+        let repo_pool = Arc::new(RepoPool::new(repo_pool_base, ssh_key_path.clone()));
+
         Self {
             work_base,
             max_concurrent,
@@ -43,6 +48,7 @@ impl Worker {
             worker_id: uuid::Uuid::nil(),
             ssh_key_path,
             running_tasks: Arc::new(RwLock::new(HashMap::new())),
+            repo_pool,
         }
     }
 
@@ -165,9 +171,10 @@ impl Worker {
                     running.insert(task_id, running_task);
                 }
 
-                let work_base = self.work_base.clone();
+                let _work_base = self.work_base.clone();
                 let ssh_key_path = self.ssh_key_path.clone();
                 let running_tasks = self.running_tasks.clone();
+                let repo_pool = self.repo_pool.clone();
 
                 std::thread::spawn(move || {
                     let rt = tokio::runtime::Builder::new_current_thread()
@@ -180,11 +187,11 @@ impl Worker {
 
                         let result = Self::execute_task(
                             &task,
-                            &work_base,
                             &ssh_key_path,
                             cancel_token,
                             instruction_rx,
                             event_tx.clone(),
+                            repo_pool,
                         )
                         .await;
 
@@ -266,47 +273,48 @@ impl Worker {
 
     async fn execute_task(
         task: &ProtocolTask,
-        work_base: &PathBuf,
         ssh_key_path: &PathBuf,
         cancel_token: CancellationToken,
         instruction_rx: mpsc::Receiver<TaskInstruction>,
         event_tx: mpsc::Sender<WorkerEvent>,
+        repo_pool: Arc<RepoPool>,
     ) -> Result<()> {
-        let task_dir = work_base.join(task.id.to_string());
-        tokio::fs::create_dir_all(&task_dir)
-            .await
-            .context("Failed to create task directory")?;
 
-        let repo_dir = task_dir.join("repo");
-        let git = GitOps::clone(&task.repo_url, &task.base_branch, &repo_dir, ssh_key_path)?;
+        let repo_dir = repo_pool
+            .acquire_slot(
+                &task.repo_url,
+                task.id,
+                &task.base_branch,
+                &task.target_branch,
+            )
+            .await
+            .context("Failed to acquire repo slot")?;
 
         if cancel_token.is_cancelled() {
+            let _ = repo_pool.release_slot(&task.repo_url, task.id).await;
             return Err(anyhow::anyhow!("Task cancelled before execution"));
         }
-
-        git.create_branch(&task.target_branch)?;
 
         let workdir = std::fs::canonicalize(&repo_dir)
             .context("Failed to resolve absolute path for workdir")?;
 
-        let runner = TaskRunner::new(
-            task.id,
-            task.description.clone(),
-            workdir,
-        );
+        let runner = TaskRunner::new(task.id, task.description.clone(), workdir);
 
         runner
             .run(cancel_token.clone(), event_tx.clone(), instruction_rx)
             .await?;
 
         if !cancel_token.is_cancelled() {
+            let git = GitOps {
+                repo_path: repo_dir.clone(),
+            };
             git.add_all()?;
             git.commit(&format!("Implement: {}", task.description))?;
             git.push(&task.target_branch, ssh_key_path)?;
         }
 
-        if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
-            warn!("Failed to cleanup task dir: {}", e);
+        if let Err(e) = repo_pool.release_slot(&task.repo_url, task.id).await {
+            warn!("Failed to release repo slot: {}", e);
         }
 
         Ok(())

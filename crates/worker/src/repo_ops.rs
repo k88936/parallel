@@ -119,4 +119,69 @@ impl GitOps {
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
+    pub fn fetch(&self, ssh_key_path: &Path) -> Result<()> {
+        let ssh_cmd = format!(
+            "ssh -i {} -o StrictHostKeyChecking=no",
+            ssh_key_path.display()
+        );
+
+        let output = Command::new("git")
+            .env("GIT_SSH_COMMAND", &ssh_cmd)
+            .args(["fetch", "--all"])
+            .current_dir(&self.repo_path)
+            .output()
+            .context("Failed to execute git fetch")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!("Git fetch warning: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    pub fn force_checkout(&self, branch: &str) -> Result<()> {
+        let output = Command::new("git")
+            .args(["checkout", "-f", branch])
+            .current_dir(&self.repo_path)
+            .output()
+            .context("Failed to force checkout")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let output_reset = Command::new("git")
+                .args(["reset", "--hard", &format!("origin/{}", branch)])
+                .current_dir(&self.repo_path)
+                .output()
+                .context("Failed to reset")?;
+
+            if !output_reset.status.success() {
+                let stderr_reset = String::from_utf8_lossy(&output_reset.stderr);
+                anyhow::bail!(
+                    "Git checkout and reset failed: {} / {}",
+                    stderr,
+                    stderr_reset
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_branch_if_exists(&self, branch: &str) -> Result<()> {
+        let output = Command::new("git")
+            .args(["branch", "-D", branch])
+            .current_dir(&self.repo_path)
+            .output()
+            .context("Failed to delete branch")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.contains("not found") && !stderr.contains("does not exist") {
+                tracing::debug!("Branch delete info: {}", stderr);
+            }
+        }
+
+        Ok(())
+    }
 }
