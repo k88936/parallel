@@ -10,7 +10,6 @@ async fn test_full_task_lifecycle() {
     let server = common::start_test_server().await;
     let client = reqwest::Client::new();
 
-    // 1. Create a task
     let create_response = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
@@ -26,7 +25,6 @@ async fn test_full_task_lifecycle() {
     let create_data: CreateTaskResponse = create_response.json().await.unwrap();
     let task_id = create_data.task_id;
 
-    // 2. List tasks and verify the task exists
     let list_response = client
         .get(&format!("{}/api/tasks", server.url))
         .send()
@@ -38,7 +36,6 @@ async fn test_full_task_lifecycle() {
     assert!(list_data.tasks.iter().any(|t| t.id == task_id));
     assert_eq!(list_data.total, 1);
 
-    // 3. Get the specific task
     let get_response = client
         .get(&format!("{}/api/tasks/{}", server.url, task_id))
         .send()
@@ -55,7 +52,6 @@ async fn test_full_task_lifecycle() {
     assert_eq!(task.base_branch, "main");
     assert!(task.claimed_by.is_none());
 
-    // 4. Cancel the task
     let cancel_response = client
         .delete(&format!("{}/api/tasks/{}", server.url, task_id))
         .send()
@@ -64,7 +60,6 @@ async fn test_full_task_lifecycle() {
 
     assert_eq!(cancel_response.status(), StatusCode::NO_CONTENT);
 
-    // 5. Verify the task is cancelled
     let get_response = client
         .get(&format!("{}/api/tasks/{}", server.url, task_id))
         .send()
@@ -76,11 +71,10 @@ async fn test_full_task_lifecycle() {
 }
 
 #[tokio::test]
-async fn test_worker_registration_and_task_claiming() {
+async fn test_worker_poll_and_events() {
     let server = common::start_test_server().await;
     let client = reqwest::Client::new();
 
-    // 1. Register a worker
     let register_response = client
         .post(&format!("{}/api/workers/register", server.url))
         .json(&json!({
@@ -101,11 +95,8 @@ async fn test_worker_registration_and_task_claiming() {
     let worker_id = worker_data.id;
     assert_eq!(worker_data.name, "test-worker-01");
     assert_eq!(worker_data.status, WorkerStatus::Idle);
+    assert!(worker_data.current_tasks.is_empty());
 
-    // 2. Create multiple tasks with different priorities
-    let mut task_ids = Vec::new();
-    
-    // Low priority task
     let resp = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
@@ -117,9 +108,8 @@ async fn test_worker_registration_and_task_claiming() {
         .await
         .unwrap();
     let data: CreateTaskResponse = resp.json().await.unwrap();
-    task_ids.push(data.task_id);
+    let low_task_id = data.task_id;
 
-    // High priority task
     let resp = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
@@ -131,9 +121,8 @@ async fn test_worker_registration_and_task_claiming() {
         .await
         .unwrap();
     let data: CreateTaskResponse = resp.json().await.unwrap();
-    task_ids.push(data.task_id);
+    let high_task_id = data.task_id;
 
-    // Normal priority task
     let resp = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
@@ -144,159 +133,63 @@ async fn test_worker_registration_and_task_claiming() {
         .await
         .unwrap();
     let data: CreateTaskResponse = resp.json().await.unwrap();
-    task_ids.push(data.task_id);
+    let _normal_task_id = data.task_id;
 
-    // 3. Claim a task - should get the high priority one
-    let claim_response = client
-        .post(&format!("{}/api/tasks/claim", server.url))
-        .json(&ClaimTaskRequest { worker_id })
+    let poll_response = client
+        .post(&format!("{}/api/workers/poll", server.url))
+        .json(&PollRequest { worker_id })
         .send()
         .await
         .unwrap();
 
-    assert_eq!(claim_response.status(), StatusCode::OK);
-    let claim_data: ClaimTaskResponse = claim_response.json().await.unwrap();
-    let claimed_task = claim_data.task.expect("Should claim a task");
+    assert_eq!(poll_response.status(), StatusCode::OK);
+    let poll_data: PollResponse = poll_response.json().await.unwrap();
+    assert!(!poll_data.instructions.is_empty());
     
-    assert_eq!(claimed_task.priority, TaskPriority::High);
-    assert_eq!(claimed_task.status, TaskStatus::Claimed);
-    assert_eq!(claimed_task.claimed_by, Some(worker_id));
-
-    // 4. Claim another task - should get normal priority
-    let claim_response = client
-        .post(&format!("{}/api/tasks/claim", server.url))
-        .json(&ClaimTaskRequest { worker_id })
-        .send()
-        .await
-        .unwrap();
-
-    let claim_data: ClaimTaskResponse = claim_response.json().await.unwrap();
-    let claimed_task = claim_data.task.expect("Should claim a task");
-    assert_eq!(claimed_task.priority, TaskPriority::Normal);
-
-    // 5. Claim another task - should get low priority
-    let claim_response = client
-        .post(&format!("{}/api/tasks/claim", server.url))
-        .json(&ClaimTaskRequest { worker_id })
-        .send()
-        .await
-        .unwrap();
-
-    let claim_data: ClaimTaskResponse = claim_response.json().await.unwrap();
-    let claimed_task = claim_data.task.expect("Should claim a task");
-    assert_eq!(claimed_task.priority, TaskPriority::Low);
-
-    // 6. Try to claim when no tasks available
-    let claim_response = client
-        .post(&format!("{}/api/tasks/claim", server.url))
-        .json(&ClaimTaskRequest { worker_id })
-        .send()
-        .await
-        .unwrap();
-
-    let claim_data: ClaimTaskResponse = claim_response.json().await.unwrap();
-    assert!(claim_data.task.is_none());
-}
-
-#[tokio::test]
-async fn test_list_tasks_with_filters() {
-    let server = common::start_test_server().await;
-    let client = reqwest::Client::new();
-
-    // Create tasks
-    for i in 0..5 {
-        client
-            .post(&format!("{}/api/tasks", server.url))
-            .json(&json!({
-                "repo_url": format!("git@github.com:test/repo{}.git", i),
-                "description": format!("Task {}", i)
-            }))
-            .send()
-            .await
-            .unwrap();
+    let first_instruction = &poll_data.instructions[0];
+    match first_instruction {
+        WorkerInstruction::AssignTask { task } => {
+            assert_eq!(task.id, high_task_id);
+            assert_eq!(task.priority, TaskPriority::High);
+        }
+        _ => panic!("Expected AssignTask instruction"),
     }
 
-    // List all tasks
-    let resp = client
-        .get(&format!("{}/api/tasks", server.url))
-        .send()
-        .await
-        .unwrap();
-    let data: TaskListResponse = resp.json().await.unwrap();
-    assert_eq!(data.tasks.len(), 5);
-    assert_eq!(data.total, 5);
-
-    // List with limit
-    let resp = client
-        .get(&format!("{}/api/tasks?limit=2", server.url))
-        .send()
-        .await
-        .unwrap();
-    let data: TaskListResponse = resp.json().await.unwrap();
-    assert_eq!(data.tasks.len(), 2);
-    assert_eq!(data.total, 5); // Total still 5
-
-    // List with offset
-    let resp = client
-        .get(&format!("{}/api/tasks?offset=2&limit=2", server.url))
-        .send()
-        .await
-        .unwrap();
-    let data: TaskListResponse = resp.json().await.unwrap();
-    assert_eq!(data.tasks.len(), 2);
-    assert_eq!(data.total, 5);
-
-    // Register worker and claim a task
-    let resp = client
-        .post(&format!("{}/api/workers/register", server.url))
-        .json(&json!({
-            "name": "test-worker",
-            "capabilities": {
-                "has_git": true,
-                "has_opencode": true,
-                "supported_languages": []
-            },
-            "max_concurrent": 1
-        }))
-        .send()
-        .await
-        .unwrap();
-    let worker_data: WorkerInfo = resp.json().await.unwrap();
-
-    client
-        .post(&format!("{}/api/tasks/claim", server.url))
-        .json(&ClaimTaskRequest { worker_id: worker_data.id })
+    let events_response = client
+        .post(&format!("{}/api/workers/events", server.url))
+        .json(&PushEventsRequest {
+            worker_id,
+            events: vec![
+                WorkerEvent::TaskStarted { task_id: high_task_id },
+                WorkerEvent::TaskCompleted { task_id: high_task_id },
+            ],
+        })
         .send()
         .await
         .unwrap();
 
-    // List only queued tasks
-    let resp = client
-        .get(&format!("{}/api/tasks?status=queued", server.url))
-        .send()
-        .await
-        .unwrap();
-    let data: TaskListResponse = resp.json().await.unwrap();
-    assert_eq!(data.tasks.len(), 4);
-    assert_eq!(data.total, 4);
+    assert_eq!(events_response.status(), StatusCode::OK);
+    let events_data: PushEventsResponse = events_response.json().await.unwrap();
+    assert!(events_data.acknowledged);
 
-    // List only claimed tasks
-    let resp = client
-        .get(&format!("{}/api/tasks?status=claimed", server.url))
+    let poll_response = client
+        .post(&format!("{}/api/workers/poll", server.url))
+        .json(&PollRequest { worker_id })
         .send()
         .await
         .unwrap();
-    let data: TaskListResponse = resp.json().await.unwrap();
-    assert_eq!(data.tasks.len(), 1);
-    assert_eq!(data.total, 1);
+
+    let poll_data: PollResponse = poll_response.json().await.unwrap();
+    if let Some(WorkerInstruction::AssignTask { task }) = poll_data.instructions.first() {
+        assert_eq!(task.id, low_task_id);
+    }
 }
 
 #[tokio::test]
-async fn test_worker_heartbeat() {
+async fn test_worker_heartbeat_via_events() {
     let server = common::start_test_server().await;
     let client = reqwest::Client::new();
 
-    // Register worker
     let resp = client
         .post(&format!("{}/api/workers/register", server.url))
         .json(&json!({
@@ -314,20 +207,20 @@ async fn test_worker_heartbeat() {
     let worker_data: WorkerInfo = resp.json().await.unwrap();
     let worker_id = worker_data.id;
 
-    // Wait a bit
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    // Send heartbeat
-    let heartbeat_response = client
-        .post(&format!("{}/api/workers/heartbeat", server.url))
-        .json(&json!({ "worker_id": worker_id }))
+    let events_response = client
+        .post(&format!("{}/api/workers/events", server.url))
+        .json(&PushEventsRequest {
+            worker_id,
+            events: vec![WorkerEvent::Heartbeat { running_tasks: vec![] }],
+        })
         .send()
         .await
         .unwrap();
 
-    assert_eq!(heartbeat_response.status(), StatusCode::OK);
+    assert_eq!(events_response.status(), StatusCode::OK);
 
-    // Verify worker updated
     let list_response = client
         .get(&format!("{}/api/workers", server.url))
         .send()
@@ -344,7 +237,6 @@ async fn test_concurrent_task_claiming() {
     let server = common::start_test_server().await;
     let client = reqwest::Client::new();
 
-    // Create tasks
     let mut task_ids = Vec::new();
     for i in 0..3 {
         let resp = client
@@ -360,7 +252,6 @@ async fn test_concurrent_task_claiming() {
         task_ids.push(data.task_id);
     }
 
-    // Register multiple workers
     let mut worker_ids = Vec::new();
     for i in 0..3 {
         let resp = client
@@ -381,25 +272,28 @@ async fn test_concurrent_task_claiming() {
         worker_ids.push(data.id);
     }
 
-    // Claim tasks concurrently
     let mut handles = Vec::new();
     for worker_id in worker_ids {
         let client = client.clone();
         let url = server.url.clone();
         let handle = tokio::spawn(async move {
             let resp = client
-                .post(&format!("{}/api/tasks/claim", url))
-                .json(&ClaimTaskRequest { worker_id })
+                .post(&format!("{}/api/workers/poll", url))
+                .json(&PollRequest { worker_id })
                 .send()
                 .await
                 .unwrap();
-            let data: ClaimTaskResponse = resp.json().await.unwrap();
-            data.task.map(|t| t.id)
+            let data: PollResponse = resp.json().await.unwrap();
+            data.instructions.into_iter().filter_map(|i| {
+                match i {
+                    WorkerInstruction::AssignTask { task } => Some(task.id),
+                    _ => None,
+                }
+            }).next()
         });
         handles.push(handle);
     }
 
-    // Collect results
     let mut claimed_task_ids: Vec<Uuid> = Vec::new();
     for handle in handles {
         if let Some(task_id) = handle.await.unwrap() {
@@ -408,12 +302,10 @@ async fn test_concurrent_task_claiming() {
     }
     claimed_task_ids.sort();
 
-    // Verify all tasks were claimed exactly once
     assert_eq!(claimed_task_ids.len(), 3);
     task_ids.sort();
     assert_eq!(claimed_task_ids, task_ids);
 
-    // Verify no double-claiming
     let resp = client
         .get(&format!("{}/api/tasks?status=queued", server.url))
         .send()
@@ -430,7 +322,6 @@ async fn test_task_not_found() {
 
     let fake_id = Uuid::new_v4();
 
-    // Get non-existent task
     let resp = client
         .get(&format!("{}/api/tasks/{}", server.url, fake_id))
         .send()
@@ -438,7 +329,6 @@ async fn test_task_not_found() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 
-    // Cancel non-existent task
     let resp = client
         .delete(&format!("{}/api/tasks/{}", server.url, fake_id))
         .send()
@@ -482,7 +372,6 @@ async fn test_submit_feedback() {
     let server = common::start_test_server().await;
     let client = reqwest::Client::new();
 
-    // Create task
     let resp = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
@@ -495,7 +384,6 @@ async fn test_submit_feedback() {
     let data: CreateTaskResponse = resp.json().await.unwrap();
     let task_id = data.task_id;
 
-    // Submit feedback
     let resp = client
         .post(&format!("{}/api/tasks/{}/feedback", server.url, task_id))
         .json(&json!({

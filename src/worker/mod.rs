@@ -1,4 +1,4 @@
-pub mod executor;
+pub mod acp_client;
 pub mod git;
 pub mod api_client;
 pub mod task;

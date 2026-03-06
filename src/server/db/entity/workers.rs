@@ -9,25 +9,13 @@ pub struct Model {
     pub name: String,
     pub status: String,
     pub last_heartbeat: DateTimeUtc,
-    pub current_task: Option<Uuid>,
+    pub current_tasks_json: String,
+    pub pending_instructions_json: String,
     pub capabilities_json: String,
     pub max_concurrent: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::tasks::Entity",
-        from = "Column::CurrentTask",
-        to = "super::tasks::Column::Id"
-    )]
-    Task,
-}
-
-impl Related<super::tasks::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Task.def()
-    }
-}
+pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}

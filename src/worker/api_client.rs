@@ -4,9 +4,9 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::protocol::{
-    ClaimTaskRequest, ClaimTaskResponse, CreateTaskRequest, CreateTaskResponse,
-    HeartbeatRequest, HeartbeatResponse, RegisterWorkerRequest,
-    Task, TaskStatus, WorkerCapabilities, WorkerInfo,
+    CreateTaskRequest, CreateTaskResponse, WorkerCapabilities, WorkerInfo,
+    Task, PollRequest, PollResponse, PushEventsRequest, PushEventsResponse,
+    WorkerInstruction, WorkerEvent,
 };
 
 pub struct APIClient {
@@ -17,7 +17,7 @@ pub struct APIClient {
 impl APIClient {
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(60))
             .build()
             .unwrap();
 
@@ -58,13 +58,10 @@ impl APIClient {
         Ok(worker_info)
     }
 
-    pub async fn heartbeat(&self, worker_id: Uuid, current_task: Option<Uuid>) -> Result<bool> {
-        let url = format!("{}/api/workers/heartbeat", self.base_url);
+    pub async fn poll_instructions(&self, worker_id: Uuid) -> Result<Vec<WorkerInstruction>> {
+        let url = format!("{}/api/workers/poll", self.base_url);
 
-        let request = HeartbeatRequest {
-            worker_id,
-            current_task,
-        };
+        let request = PollRequest { worker_id };
 
         let response = self
             .client
@@ -72,71 +69,44 @@ impl APIClient {
             .json(&request)
             .send()
             .await
-            .context("Failed to send heartbeat")?;
+            .context("Failed to poll instructions")?;
 
         if !response.status().is_success() {
-            tracing::warn!("Heartbeat failed: status {}", response.status());
+            anyhow::bail!("Failed to poll instructions: status {}", response.status());
+        }
+
+        let poll_response = response
+            .json::<PollResponse>()
+            .await
+            .context("Failed to parse poll response")?;
+
+        Ok(poll_response.instructions)
+    }
+
+    pub async fn push_events(&self, worker_id: Uuid, events: Vec<WorkerEvent>) -> Result<bool> {
+        let url = format!("{}/api/workers/events", self.base_url);
+
+        let request = PushEventsRequest { worker_id, events };
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to push events")?;
+
+        if !response.status().is_success() {
+            tracing::warn!("Push events failed: status {}", response.status());
             return Ok(false);
         }
 
-        let heartbeat_response = response
-            .json::<HeartbeatResponse>()
+        let push_response = response
+            .json::<PushEventsResponse>()
             .await
-            .context("Failed to parse heartbeat response")?;
+            .context("Failed to parse push events response")?;
 
-        Ok(heartbeat_response.acknowledged)
-    }
-
-    pub async fn claim_task(&self, worker_id: Uuid) -> Result<Option<Task>> {
-        let url = format!("{}/api/tasks/claim", self.base_url);
-
-        let request = ClaimTaskRequest { worker_id };
-
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to claim task")?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("Failed to claim task: status {}", response.status());
-        }
-
-        let claim_response = response
-            .json::<ClaimTaskResponse>()
-            .await
-            .context("Failed to parse claim response")?;
-
-        Ok(claim_response.task)
-    }
-
-    pub async fn report_task_status(
-        &self,
-        task_id: Uuid,
-        status: TaskStatus
-    ) -> Result<()> {
-        let url = format!("{}/api/tasks/{}/status", self.base_url, task_id);
-
-        let request = UpdateTaskStatusRequest { status };
-
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to update task status")?;
-
-        if !response.status().is_success() {
-            anyhow::bail!(
-                "Failed to update task status: status {}",
-                response.status()
-            );
-        }
-
-        Ok(())
+        Ok(push_response.acknowledged)
     }
 
     pub async fn get_task(&self, task_id: Uuid) -> Result<Task> {
@@ -186,6 +156,8 @@ impl APIClient {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct UpdateTaskStatusRequest {
-    status: TaskStatus,
+struct RegisterWorkerRequest {
+    name: String,
+    capabilities: WorkerCapabilities,
+    max_concurrent: usize,
 }

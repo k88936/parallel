@@ -95,19 +95,6 @@ pub async fn cancel_task(
     }
 }
 
-pub async fn claim_task(
-    State(state): State<AppState>,
-    Json(payload): Json<ClaimTaskRequest>,
-) -> Result<Json<ClaimTaskResponse>, StatusCode> {
-    match state.scheduler.claim_task(&payload.worker_id).await {
-        Ok(task) => Ok(Json(ClaimTaskResponse { task })),
-        Err(e) => {
-            tracing::error!("Failed to claim task: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
 pub async fn submit_feedback(
     State(_state): State<AppState>,
     Path(task_id): Path<Uuid>,

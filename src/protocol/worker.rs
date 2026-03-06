@@ -56,7 +56,7 @@ pub struct WorkerInfo {
     pub name: String,
     pub status: WorkerStatus,
     pub last_heartbeat: DateTime<Utc>,
-    pub current_task: Option<Uuid>,
+    pub current_tasks: Vec<Uuid>,
     pub capabilities: WorkerCapabilities,
     pub max_concurrent: usize,
 }
@@ -71,15 +71,4 @@ pub struct RegisterWorkerRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterWorkerResponse {
     pub worker_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeartbeatRequest {
-    pub worker_id: Uuid,
-    pub current_task: Option<Uuid>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeartbeatResponse {
-    pub acknowledged: bool,
 }

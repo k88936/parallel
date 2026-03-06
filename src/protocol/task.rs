@@ -13,6 +13,7 @@ pub enum TaskStatus {
     Iterating,
     Completed,
     Cancelled,
+    Failed,
 }
 
 impl TaskStatus {
@@ -26,6 +27,7 @@ impl TaskStatus {
             TaskStatus::Iterating => "iterating",
             TaskStatus::Completed => "completed",
             TaskStatus::Cancelled => "cancelled",
+            TaskStatus::Failed => "failed",
         }
     }
 
@@ -39,6 +41,7 @@ impl TaskStatus {
             "iterating" => Some(TaskStatus::Iterating),
             "completed" => Some(TaskStatus::Completed),
             "cancelled" => Some(TaskStatus::Cancelled),
+            "failed" => Some(TaskStatus::Failed),
             _ => None,
         }
     }
@@ -160,4 +163,44 @@ pub struct ClaimTaskRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaimTaskResponse {
     pub task: Option<Task>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkerInstruction {
+    AssignTask { task: Task },
+    CancelTask { task_id: Uuid, reason: String },
+    UpdateTask { task_id: Uuid, instruction: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkerEvent {
+    Heartbeat { running_tasks: Vec<Uuid> },
+    TaskStarted { task_id: Uuid },
+    TaskProgress { task_id: Uuid, message: String },
+    TaskCompleted { task_id: Uuid },
+    TaskFailed { task_id: Uuid, error: String },
+    TaskCancelled { task_id: Uuid },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollRequest {
+    pub worker_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollResponse {
+    pub instructions: Vec<WorkerInstruction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushEventsRequest {
+    pub worker_id: Uuid,
+    pub events: Vec<WorkerEvent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushEventsResponse {
+    pub acknowledged: bool,
 }

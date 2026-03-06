@@ -44,6 +44,7 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # System utilities
 hostname = "0.4"
+nix = { version = "0.29", features = ["signal", "process"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

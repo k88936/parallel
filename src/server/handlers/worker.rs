@@ -25,7 +25,8 @@ pub async fn register_worker(
         name: Set(payload.name.clone()),
         status: Set(WorkerStatus::Idle.as_str().to_string()),
         last_heartbeat: Set(now),
-        current_task: Set(None),
+        current_tasks_json: Set("[]".to_string()),
+        pending_instructions_json: Set("[]".to_string()),
         capabilities_json: Set(capabilities_json.clone()),
         max_concurrent: Set(payload.max_concurrent as i32),
     };
@@ -43,39 +44,36 @@ pub async fn register_worker(
         name: payload.name,
         status: WorkerStatus::Idle,
         last_heartbeat: now,
-        current_task: None,
+        current_tasks: vec![],
         capabilities: payload.capabilities,
         max_concurrent: payload.max_concurrent,
     }))
 }
 
-pub async fn heartbeat(
+pub async fn poll_instructions(
     State(state): State<AppState>,
-    Json(payload): Json<HeartbeatRequest>,
-) -> Result<Json<HeartbeatResponse>, StatusCode> {
-    let now = Utc::now();
+    Json(payload): Json<PollRequest>,
+) -> Result<Json<PollResponse>, StatusCode> {
+    match state.scheduler.poll_instructions(&payload.worker_id).await {
+        Ok(instructions) => Ok(Json(PollResponse { instructions })),
+        Err(e) => {
+            tracing::error!("Failed to poll instructions: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
 
-    let worker = workers::Entity::find_by_id(payload.worker_id)
-        .one(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    let mut worker: workers::ActiveModel = worker.into();
-    worker.last_heartbeat = Set(now);
-    worker.current_task = Set(payload.current_task);
-    worker.status = Set(if payload.current_task.is_some() {
-        WorkerStatus::Busy.as_str().to_string()
-    } else {
-        WorkerStatus::Idle.as_str().to_string()
-    });
-
-    worker.update(&state.db).await.map_err(|e| {
-        tracing::error!("Failed to update heartbeat: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(HeartbeatResponse { acknowledged: true }))
+pub async fn push_events(
+    State(state): State<AppState>,
+    Json(payload): Json<PushEventsRequest>,
+) -> Result<Json<PushEventsResponse>, StatusCode> {
+    match state.scheduler.process_events(&payload.worker_id, payload.events).await {
+        Ok(()) => Ok(Json(PushEventsResponse { acknowledged: true })),
+        Err(e) => {
+            tracing::error!("Failed to process events: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 pub async fn list_workers(
@@ -94,13 +92,15 @@ pub async fn list_workers(
         .map(|w| {
             let capabilities: WorkerCapabilities = serde_json::from_str(&w.capabilities_json)
                 .unwrap_or_default();
+            let current_tasks: Vec<Uuid> = serde_json::from_str(&w.current_tasks_json)
+                .unwrap_or_default();
 
             WorkerInfo {
                 id: w.id,
                 name: w.name,
                 status: WorkerStatus::from_str(&w.status).unwrap_or(WorkerStatus::Offline),
                 last_heartbeat: w.last_heartbeat,
-                current_task: w.current_task,
+                current_tasks,
                 capabilities,
                 max_concurrent: w.max_concurrent as usize,
             }

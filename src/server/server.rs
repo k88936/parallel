@@ -29,9 +29,9 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/tasks/:id/feedback", post(task::submit_feedback))
         .route("/api/tasks/:id/status", post(task::update_task_status))
         .route("/api/workers/register", post(worker::register_worker))
-        .route("/api/workers/heartbeat", post(worker::heartbeat))
+        .route("/api/workers/poll", post(worker::poll_instructions))
+        .route("/api/workers/events", post(worker::push_events))
         .route("/api/workers", get(worker::list_workers))
-        .route("/api/tasks/claim", post(task::claim_task))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
