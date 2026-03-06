@@ -4,11 +4,7 @@ use tracing::{info, Level};
 
 fn init_logging() {
     tracing_subscriber::fmt()
-        .with_max_level(Level::DEBUG)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
+        .with_max_level(Level::INFO)
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive(Level::INFO.into())
@@ -22,13 +18,9 @@ async fn main() -> anyhow::Result<()> {
     init_logging();
 
     info!("=== Parallel Worker Starting ===");
-    info!("Initializing worker configuration");
 
     let work_base = PathBuf::from(
         env::var("WORKER_WORK_BASE").unwrap_or_else(|_| "./work".to_string())
-    );
-    let agent_path = PathBuf::from(
-        env::var("WORKER_AGENT_PATH").unwrap_or_else(|_| "opencode".to_string())
     );
     let server_url = env::var("SERVER_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
@@ -50,7 +42,6 @@ async fn main() -> anyhow::Result<()> {
 
     info!(
         work_base = %work_base.display(),
-        agent_path = %agent_path.display(),
         server_url = %server_url,
         worker_name = %worker_name,
         ssh_key = %ssh_key_path.display(),
@@ -58,9 +49,8 @@ async fn main() -> anyhow::Result<()> {
         "Worker configuration loaded"
     );
 
-    let mut worker = parallel::worker::Worker::new(
+    let mut worker = parallel_worker::Worker::new(
         work_base,
-        agent_path,
         max_concurrent,
         server_url,
         ssh_key_path,

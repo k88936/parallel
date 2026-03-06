@@ -12,12 +12,12 @@ async fn main() -> Result<()> {
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "sqlite://./data.db?mode=rwc".to_string());
-    
+
     let port = std::env::var("PORT")
         .map(|p| p.parse().unwrap_or(3000))
         .unwrap_or(3000);
 
-    parallel::server::server::run_server(&database_url, port).await?;
+    parallel_server::run_server(&database_url, port).await?;
 
     Ok(())
 }

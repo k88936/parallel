@@ -1,3 +1,9 @@
+pub mod db;
+pub mod errors;
+pub mod handlers;
+pub mod services;
+pub mod state;
+
 use anyhow::Result;
 use axum::{
     routing::{get, post, delete},
@@ -8,9 +14,9 @@ use sea_orm_migration::MigratorTrait;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use crate::server::db::migration::Migrator;
-use crate::server::handlers::{task, worker};
-use crate::server::state::AppState;
+use db::migration::Migrator;
+use handlers::{task, worker};
+use state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     info!("Connecting to database: {}", database_url);

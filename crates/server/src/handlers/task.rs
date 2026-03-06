@@ -3,16 +3,13 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::protocol::*;
-use crate::server::state::AppState;
+use parallel_protocol::*;
 
-#[derive(Debug, Deserialize)]
-pub struct UpdateTaskStatusRequest {
-    pub status: TaskStatus,
-}
+use crate::errors::ServerError;
+use crate::services::{Coordinator, TaskService};
+use crate::state::AppState;
 
 pub async fn create_task(
     State(state): State<AppState>,
@@ -24,8 +21,10 @@ pub async fn create_task(
     });
     let priority = payload.priority.unwrap_or_default();
 
-    match state.scheduler
-        .create_task(
+    let task_service = TaskService::new(state.db.clone());
+
+    match task_service
+        .create(
             payload.repo_url,
             payload.description,
             base_branch,
@@ -50,16 +49,11 @@ pub async fn list_tasks(
     let offset = query.offset.map(|o| o as u64);
     let status = query.status;
 
-    match state.scheduler
-        .list_tasks(status, limit, offset)
-        .await
-    {
-        Ok(tasks) => {
-            let total = state.scheduler
-                .count_tasks(status)
-                .await
-                .unwrap_or(0);
+    let task_service = TaskService::new(state.db.clone());
 
+    match task_service.list(status, limit, offset).await {
+        Ok(tasks) => {
+            let total = task_service.count(status).await.unwrap_or(0);
             Ok(Json(TaskListResponse { tasks, total }))
         }
         Err(e) => {
@@ -73,7 +67,9 @@ pub async fn get_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<Json<Task>, StatusCode> {
-    match state.scheduler.get_task(&task_id).await {
+    let task_service = TaskService::new(state.db.clone());
+
+    match task_service.get(&task_id).await {
         Ok(task) => Ok(Json(task)),
         Err(e) => {
             tracing::error!("Failed to get task: {}", e);
@@ -86,10 +82,27 @@ pub async fn cancel_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    match state.scheduler.cancel_task(&task_id).await {
-        Ok(()) => Ok(StatusCode::NO_CONTENT),
+    let task_service = TaskService::new(state.db.clone());
+    let coordinator = Coordinator::new(state.db.clone());
+
+    match task_service.get(&task_id).await {
+        Ok(task) => {
+            if let Some(worker_id) = task.claimed_by {
+                let _ = coordinator
+                    .queue_cancellation(worker_id, task_id, "Cancelled by user".to_string())
+                    .await;
+            }
+
+            match task_service.update_status(&task_id, TaskStatus::Cancelled).await {
+                Ok(()) => Ok(StatusCode::NO_CONTENT),
+                Err(e) => {
+                    tracing::error!("Failed to cancel task: {}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
         Err(e) => {
-            tracing::error!("Failed to cancel task: {}", e);
+            tracing::error!("Failed to get task for cancellation: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -101,26 +114,38 @@ pub async fn submit_feedback(
     Json(payload): Json<SubmitFeedbackRequest>,
 ) -> Result<StatusCode, StatusCode> {
     tracing::info!("Feedback submitted for task {}", task_id);
-    
+
+    let task_service = TaskService::new(state.db.clone());
+    let coordinator = Coordinator::new(state.db.clone());
+
     let feedback = HumanFeedback {
         provided_at: chrono::Utc::now(),
         feedback_type: payload.feedback_type,
         message: payload.message,
     };
-    
-    match state.scheduler.submit_feedback(&task_id, feedback).await {
-        Ok(()) => Ok(StatusCode::NO_CONTENT),
-        Err(e) => {
-            let err_str = e.to_string();
-            if err_str.contains("not claimed") {
-                tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
-                Err(StatusCode::BAD_REQUEST)
-            } else if err_str.contains("not found") {
-                Err(StatusCode::NOT_FOUND)
-            } else {
-                tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
+
+    match task_service.get(&task_id).await {
+        Ok(task) => {
+            match task.claimed_by {
+                Some(worker_id) => {
+                    match coordinator.queue_feedback(worker_id, task_id, feedback).await {
+                        Ok(()) => Ok(StatusCode::NO_CONTENT),
+                        Err(e) => {
+                            tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
+                            Err(StatusCode::INTERNAL_SERVER_ERROR)
+                        }
+                    }
+                }
+                None => {
+                    tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
+                    Err(StatusCode::BAD_REQUEST)
+                }
             }
+        }
+        Err(ServerError::TaskNotFound(_)) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to get task for feedback: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
@@ -129,7 +154,9 @@ pub async fn get_review_data(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<Json<Option<ReviewData>>, StatusCode> {
-    match state.scheduler.get_review_data(&task_id).await {
+    let task_service = TaskService::new(state.db.clone());
+
+    match task_service.get_review_data(&task_id).await {
         Ok(review_data) => Ok(Json(review_data)),
         Err(e) => {
             tracing::error!("Failed to get review data for task {}: {}", task_id, e);
@@ -143,11 +170,9 @@ pub async fn update_task_status(
     Path(task_id): Path<Uuid>,
     Json(payload): Json<UpdateTaskStatusRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    match state
-        .scheduler
-        .complete_iteration(&task_id, payload.status)
-        .await
-    {
+    let task_service = TaskService::new(state.db.clone());
+
+    match task_service.complete_iteration(&task_id, payload.status).await {
         Ok(()) => {
             tracing::info!(
                 "Task {} status updated to {:?}",

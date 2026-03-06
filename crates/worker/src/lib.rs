@@ -1,8 +1,8 @@
 pub mod acp_client;
-pub mod git;
+pub mod agent_runner;
 pub mod api_client;
-pub mod task;
+pub mod repo_ops;
 pub mod worker;
+pub mod task;
 
-pub use task::Task;
 pub use worker::Worker;

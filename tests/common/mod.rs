@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicU16, Ordering};
 use tokio::sync::Mutex;
 use std::time::Duration;
+use parallel_server::run_server;
 
 static NEXT_PORT: AtomicU16 = AtomicU16::new(3001);
 static SERVER_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -19,7 +20,7 @@ pub async fn start_test_server() -> TestServer {
     // Start server in background
     let db_url = database_url.clone();
     tokio::spawn(async move {
-        parallel::server::server::run_server(&db_url, port)
+        run_server(&db_url, port)
             .await
             .expect("Server failed to start");
     });

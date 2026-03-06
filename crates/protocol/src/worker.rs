@@ -60,15 +60,3 @@ pub struct WorkerInfo {
     pub capabilities: WorkerCapabilities,
     pub max_concurrent: usize,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegisterWorkerRequest {
-    pub name: String,
-    pub capabilities: WorkerCapabilities,
-    pub max_concurrent: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegisterWorkerResponse {
-    pub worker_id: Uuid,
-}
