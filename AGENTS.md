@@ -9,206 +9,285 @@ Parallel is a distributed system for managing AI coding agents that work on GitH
 - **Worker(s)**: Long-running daemon processes that poll and execute tasks (Rust)
 - **Web**: Next.js frontend for task management and human interaction
 
----
+## Architecture
 
-## Build/Lint/Test Commands
+### Core Components
 
-### Rust Backend
+**Server** (`src/bin/server.rs`, `crates/server/`)
+- REST API built with Axum framework
+- SQLite database for persistent task queue
+- Manages worker registration and instruction dispatch
+- Endpoints: `/api/tasks/*`, `/api/workers/*`
 
-```bash
-# Check for compilation errors (fast)
-cargo check
-# Run a specific binary
-cargo run --bin server
-cargo run --bin worker
+**Worker** (`src/bin/worker.rs`, `crates/worker/`)
+- Long-running daemon that polls server for tasks
+- Executes AI coding agents in isolated work directories
+- Handles Git operations (clone, branch, PR creation)
+- Communicates with AI agent via Agent Client Protocol (ACP)
 
-# Run all tests
-cargo test
+**Web UI** (`web/`)
+- Next.js 16 frontend with React 19
+- Tailwind CSS for styling
+- Real-time task creation and monitoring
+- Human review interface for task feedback
 
-# Run a specific test
-cargo test test_full_task_lifecycle
-cargo test test_worker_poll_and_events
+**Protocol** (`crates/protocol/`)
+- Shared data structures and types
+- Task definitions, status enums
+- Worker-to-server communication protocol
+- Instruction types for worker coordination
 
-# Run a single test file
-cargo test --test integration_test
+## File Navigation
 
-# Run tests with output
-cargo test -- --nocapture
-
-# Format code
-cargo fmt
-
-# Lint code
-cargo clippy
-
-# Check for unused dependencies
-cargo machete
+### Root Level
+```
+/
+├── Cargo.toml           # Workspace configuration with dependencies
+├── data.db             # SQLite database (created at runtime)
+├── work/               # Worker execution directories (UUID-based)
+├── scripts/            # Test and deployment scripts
+├── tests/              # Integration tests
+├── src/bin/            # Binary entry points
+│   ├── server.rs       # Server main()
+│   └── worker.rs       # Worker main()
+└── crates/             # Workspace crates
+    ├── protocol/       # Shared types and protocol definitions
+    ├── server/         # Server implementation
+    └── worker/         # Worker implementation
 ```
 
-### Web Frontend (in web/ directory)
+### Server Crate (`crates/server/`)
+```
+crates/server/src/
+├── lib.rs              # Router setup, server initialization
+├── db/
+│   ├── entity/         # SeaORM entity definitions
+│   │   ├── tasks.rs    # Task table schema
+│   │   └── workers.rs  # Worker table schema
+│   └── migration/      # Database migrations
+├── handlers/           # HTTP request handlers
+│   ├── task.rs         # Task CRUD endpoints
+│   └── worker.rs       # Worker registration & polling
+├── services/           # Business logic layer
+│   ├── coordinator.rs  # Task distribution logic
+│   ├── task_service.rs # Task operations
+│   └── worker_service.rs # Worker management
+├── state.rs            # Application state (DB connection pool)
+└── errors.rs           # Error types and handling
+```
 
+### Worker Crate (`crates/worker/`)
+```
+crates/worker/src/
+├── lib.rs              # Public exports
+├── worker.rs           # Main worker loop and registration
+├── task.rs             # Task execution logic
+├── agent_runner.rs     # AI agent process management
+├── acp_client.rs       # Agent Client Protocol client
+├── api_client.rs       # Server API client
+└── repo_ops.rs         # Git operations (clone, branch, PR)
+```
+
+### Protocol Crate (`crates/protocol/`)
+```
+crates/protocol/src/
+├── lib.rs              # Public exports
+├── task.rs             # Task, TaskStatus, TaskPriority types
+├── worker.rs           # Worker registration types
+├── requests.rs         # API request structures
+└── instructions.rs     # Worker instruction types
+```
+
+### Web Frontend (`web/`)
+```
+web/
+├── package.json        # Dependencies: Next.js 16, React 19, Tailwind 4
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx  # Root layout
+│   │   ├── page.tsx    # Home page (task list + create form)
+│   │   └── tasks/[id]/
+│   │       └── page.tsx # Task detail view
+│   ├── components/
+│   │   ├── TaskList.tsx      # Task list display
+│   │   └── CreateTaskForm.tsx # Task creation form
+│   ├── lib/
+│   │   └── api.ts      # API client functions
+│   └── types/
+│       └── task.ts     # TypeScript type definitions
+└── public/             # Static assets
+```
+
+## Data Flow
+
+### Task Lifecycle
+1. **Created** → User submits task via Web UI
+2. **Queued** → Task enters server queue
+3. **Claimed** → Worker claims task from queue
+4. **InProgress** → Worker executes AI agent
+5. **AwaitingReview** → Agent requests human feedback
+6. **Reworking** → Worker incorporates feedback
+7. **Completed** → Task finished successfully
+8. **Cancelled/Failed** → Terminal error states
+
+### Worker-Server Communication
+1. Worker registers with server (`POST /api/workers/register`)
+2. Worker polls for instructions (`POST /api/workers/poll`)
+3. Server dispatches task assignments
+4. Worker executes and reports events (`POST /api/workers/events`)
+5. Worker updates task status (`POST /api/tasks/:id/status`)
+
+## Key Types
+
+### Task Status (`crates/protocol/src/task.rs:7`)
+```rust
+enum TaskStatus {
+    Created, Queued, Claimed, InProgress,
+    AwaitingReview, Iterating, Completed,
+    Cancelled, Failed,
+}
+```
+
+### Task Priority (`crates/protocol/src/task.rs:51`)
+```rust
+enum TaskPriority {
+    Low = 0, Normal = 1, High = 2, Urgent = 3,
+}
+```
+
+### Task Structure (`crates/protocol/src/task.rs:82`)
+```rust
+struct Task {
+    id: Uuid,
+    repo_url: String,
+    description: String,
+    base_branch: String,
+    target_branch: String,
+    status: TaskStatus,
+    priority: TaskPriority,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    claimed_by: Option<Uuid>,
+}
+```
+
+## Development
+
+### Running the Server
+```bash
+cargo run --bin server
+# or with custom config:
+DATABASE_URL="sqlite://./data.db?mode=rwc" PORT=3000 cargo run --bin server
+```
+
+### Running a Worker
+```bash
+cargo run --bin worker
+# or with custom config:
+SERVER_URL="http://localhost:3000" \
+WORKER_NAME="worker-1" \
+WORKER_WORK_BASE="./work" \
+SSH_KEY_PATH="$HOME/.ssh/id_rsa" \
+MAX_CONCURRENT=4 \
+cargo run --bin worker
+```
+
+### Running the Web UI
 ```bash
 cd web
-
-# Install dependencies
-pnpm install
-
-# Development server
-pnpm run dev
-
-# Build for production
-pnpm run build
-
-# Lint code
-pnpm run lint
-
-# Type check
-pnpm run type-check  # if available
+npm install
+npm run dev  # Runs on port 8080
 ```
 
----
+### Testing
+```bash
+# Integration tests
+cargo test
 
-## Code Style Guidelines
-
-### Rust Code Style
-
-**Error Handling**
-- Use `anyhow::Result<T>` for fallible operations
-- Use `.context()` to add error context: `.context("Failed to create task")?`
-- Return `StatusCode` for HTTP handlers
-- Log errors with `tracing::error!` before returning
-- Use `anyhow::bail!` for early returns with errors
-
-**Async Code**
-- Use `tokio` runtime for async operations
-- Mark async functions with `async fn`
-- Use `.await` for async operations
-- Use `tokio::spawn` for concurrent tasks
-- Use `Arc<RwLock<T>>` for shared mutable state
-- Use `mpsc` channels for message passing
-
-**HTTP Handlers**
-- Use `axum` extractors: `State`, `Path`, `Json`, `Query`
-- Return `Result<Json<T>, StatusCode>` or `Result<StatusCode, StatusCode>`
-- Use pattern matching for error handling
-
-**Database Entities**
-- Use Sea-ORM for database operations
-- Define entities in `src/server/db/entity/`
-- Use migrations in `src/server/db/migration/`
-- Use `DateTimeUtc` for timestamps
-
----
-
-### TypeScript/React Code Style (Web)
-
-**TypeScript**
-- Strict mode enabled
-- Use `@/*` path aliases for imports
-- Prefer functional components with hooks
-- Use TypeScript interfaces for prop types
-
-**Formatting**
-- Use Next.js ESLint configuration
-- Follow React best practices
-
----
-
-## Architecture Reference
-
-### Protocol Types (`src/protocol/`)
-- `task.rs`: Task types, statuses, priorities
-- `worker.rs`: Worker types and capabilities
-- Instruction/Event pattern for worker communication
-
-### Server Components (`src/server/`)
-- `handlers/`: HTTP request handlers
-- `db/`: Database entities and migrations
-- `queue/`: Task scheduling logic
-- `state.rs`: Shared application state
-
-### Worker Components (`src/worker/`)
-- `worker.rs`: Main worker loop and task execution
-- `task.rs`: Task representation
-- `git.rs`: Git operations
-- `api_client.rs`: HTTP client for server communication
-- `acp_client.rs`: Agent client protocol implementation
-
----
-
-## Current Refactor Plan: Universal Poll/Event Architecture
-
-### Phase 1: Protocol Redesign
-
-**New Message Types in `src/protocol/`**
-
-```rust
-// Instructions (Server → Worker)
-pub enum WorkerInstruction {
-    AssignTask { task: Task },
-    CancelTask { task_id: Uuid, reason: String },
-    UpdateTask { task_id: Uuid, instruction: String },
-    Pause { task_id: Uuid },
-    Resume { task_id: Uuid },
-}
-
-// Events (Worker → Server)  
-pub enum WorkerEvent {
-    Heartbeat { running_tasks: Vec<Uuid> },
-    TaskStarted { task_id: Uuid },
-    TaskProgress { task_id: Uuid, message: String },
-    TaskCompleted { task_id: Uuid },
-    TaskFailed { task_id: Uuid, error: String },
-    TaskCancelled { task_id: Uuid },
-}
+# Phase 1 end-to-end test
+./scripts/test_phase1.sh
 ```
 
-### Phase 2: Server Changes
+### Database Management
+- SQLite database auto-created at `./data.db`
+- Migrations run automatically on server startup
+- Entity definitions: `crates/server/src/db/entity/`
+- Migrations: `crates/server/src/db/migration/`
 
-**Files to modify:**
+## Environment Variables
 
-| File | Changes |
-|------|---------|
-| `protocol/task.rs` | Add `WorkerInstruction`, `WorkerEvent` types |
-| `protocol/worker.rs` | Update `WorkerInfo` to track multiple tasks |
-| `server/handlers/worker.rs` | Replace `heartbeat` + `claim_task` with `poll` + `events` handlers |
-| `server/handlers/task.rs` | Remove `claim_task`, update `cancel_task` to queue instruction |
-| `server/queue/scheduler.rs` | Add instruction queue per worker, task assignment logic |
-| `server/server.rs` | Update routes |
+### Server
+- `DATABASE_URL`: SQLite connection string (default: `sqlite://./data.db?mode=rwc`)
+- `PORT`: Server port (default: 3000)
 
-**New API Endpoints:**
-- `POST /api/worker/poll` - Long-poll for instructions
-- `POST /api/worker/events` - Push events batch
+### Worker
+- `SERVER_URL`: Server API endpoint (default: `http://localhost:3000`)
+- `WORKER_NAME`: Unique worker identifier (default: `worker-{hostname}`)
+- `WORKER_WORK_BASE`: Base directory for task execution (default: `./work`)
+- `SSH_KEY_PATH`: SSH key for Git operations (default: `$HOME/.ssh/id_rsa`)
+- `MAX_CONCURRENT`: Max concurrent tasks per worker (default: 4)
 
-### Phase 3: Worker Refactor
+## API Endpoints
 
-**Files to modify:**
+### Tasks
+- `POST /api/tasks` - Create new task
+- `GET /api/tasks` - List all tasks
+- `GET /api/tasks/:id` - Get task details
+- `DELETE /api/tasks/:id` - Cancel task
+- `POST /api/tasks/:id/status` - Update task status
+- `POST /api/tasks/:id/feedback` - Submit human feedback
+- `GET /api/tasks/:id/review` - Get review data
 
-| File | Changes |
-|------|---------|
-| `worker/worker.rs` | Complete rewrite with task management |
-| `worker/task.rs` | Add `RunningTask` with cancellation token |
-| `worker/api_client.rs` | Replace methods with `poll_instructions`, `send_events` |
+### Workers
+- `POST /api/workers/register` - Register new worker
+- `POST /api/workers/poll` - Poll for instructions
+- `POST /api/workers/events` - Push worker events
+- `GET /api/workers` - List all workers
 
-**New Worker Architecture:**
-```
-Worker {
-    running_tasks: HashMap<Uuid, RunningTask>,
-    instruction_rx: mpsc::Receiver<WorkerInstruction>,
-    event_tx: mpsc::Sender<WorkerEvent>,
-}
+## Dependencies
 
-RunningTask {
-    task: Task,
-    cancel_token: CancellationToken,
-    instruction_tx: mpsc::Sender<TaskInstruction>,
-}
-```
+### Rust (Workspace)
+- **Web Framework**: Axum 0.7 with Tower middleware
+- **Database**: SeaORM 1.0 with SQLite
+- **Async Runtime**: Tokio 1.x
+- **Serialization**: serde, serde_json
+- **Logging**: tracing, tracing-subscriber
+- **Date/Time**: chrono
+- **Agent Protocol**: agent-client-protocol 0.9.5
 
-**Worker Main Loop:**
-1. Spawn `poll_loop` - continuously polls server for instructions
-2. Spawn `event_loop` - batches and sends events to server
-3. Main loop handles instructions:
-   - `AssignTask` → spawn task executor with cancellation token
-   - `CancelTask` → trigger cancellation, wait for graceful shutdown
-   - `UpdateTask` → send instruction to running task's channel
+### Web (Next.js)
+- **Framework**: Next.js 16.1.6
+- **UI**: React 19.2.3
+- **Styling**: Tailwind CSS 4
+- **Language**: TypeScript 5
+
+## Common Patterns
+
+### Adding a New API Endpoint
+1. Add route in `crates/server/src/lib.rs`
+2. Create handler in `crates/server/src/handlers/`
+3. Add service logic in `crates/server/src/services/`
+4. Define request/response types in `crates/protocol/src/`
+
+### Adding a New Worker Instruction
+1. Define instruction type in `crates/protocol/src/instructions.rs`
+2. Handle instruction in `crates/worker/src/worker.rs`
+3. Add instruction dispatch in `crates/server/src/services/coordinator.rs`
+
+### Modifying Task Flow
+1. Update status enum in `crates/protocol/src/task.rs`
+2. Add migration if needed in `crates/server/src/db/migration/`
+3. Update entity in `crates/server/src/db/entity/tasks.rs`
+4. Update handlers and services as needed
+5. Update Web UI types in `web/src/types/task.ts`
+
+## Notes for AI Agents
+
+- **Code Style**: Follow existing Rust conventions in the codebase
+- **No Comments**: Do not add comments unless explicitly requested
+- **Error Handling**: Use `anyhow::Result` for fallible operations
+- **Async**: Use Tokio for all async operations
+- **Database**: Always use SeaORM entities, never raw SQL
+- **Testing**: Write integration tests in `tests/integration_test.rs`
+- **Web UI**: Use TypeScript with strict typing
+- **Commits**: Only commit when explicitly requested by user

@@ -153,6 +153,7 @@ impl AgentRunner {
                                         diff,
                                     }).await?;
 
+                                    // wait for human in the loop
                                     tokio::select! {
                                         Some(instruction) = instruction_rx.recv() => {
                                             match instruction {
