@@ -96,12 +96,46 @@ pub async fn cancel_task(
 }
 
 pub async fn submit_feedback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
-    Json(_payload): Json<SubmitFeedbackRequest>,
+    Json(payload): Json<SubmitFeedbackRequest>,
 ) -> Result<StatusCode, StatusCode> {
     tracing::info!("Feedback submitted for task {}", task_id);
-    Ok(StatusCode::NO_CONTENT)
+    
+    let feedback = HumanFeedback {
+        provided_at: chrono::Utc::now(),
+        feedback_type: payload.feedback_type,
+        message: payload.message,
+    };
+    
+    match state.scheduler.submit_feedback(&task_id, feedback).await {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("not claimed") {
+                tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
+                Err(StatusCode::BAD_REQUEST)
+            } else if err_str.contains("not found") {
+                Err(StatusCode::NOT_FOUND)
+            } else {
+                tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+}
+
+pub async fn get_review_data(
+    State(state): State<AppState>,
+    Path(task_id): Path<Uuid>,
+) -> Result<Json<Option<ReviewData>>, StatusCode> {
+    match state.scheduler.get_review_data(&task_id).await {
+        Ok(review_data) => Ok(Json(review_data)),
+        Err(e) => {
+            tracing::error!("Failed to get review data for task {}: {}", task_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 pub async fn update_task_status(

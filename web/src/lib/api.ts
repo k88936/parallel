@@ -5,6 +5,7 @@ import type {
   TaskListResponse,
   ListTasksQuery,
   SubmitFeedbackRequest,
+  ReviewData,
 } from '@/types/task';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -77,6 +78,10 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async getReviewData(taskId: string): Promise<ReviewData | null> {
+    return this.request<ReviewData | null>(`/api/tasks/${taskId}/review`);
   }
 }
 

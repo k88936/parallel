@@ -192,4 +192,36 @@ impl GitOps {
         );
         Ok(())
     }
+
+    #[instrument(skip(self), fields(repo_path = %self.repo_path.display()))]
+    pub fn diff(&self) -> Result<String> {
+        debug!("Getting git diff");
+
+        let start = std::time::Instant::now();
+        let output = Command::new("git")
+            .args(["diff", "HEAD"])
+            .current_dir(&self.repo_path)
+            .output()
+            .context("Failed to get git diff")?;
+
+        let elapsed = start.elapsed();
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            warn!(
+                exit_code = ?output.status.code(),
+                stderr = %stderr,
+                elapsed_ms = elapsed.as_millis(),
+                "Git diff returned non-zero (possibly no commits yet)"
+            );
+        }
+
+        let diff = String::from_utf8_lossy(&output.stdout).to_string();
+        info!(
+            elapsed_ms = elapsed.as_millis(),
+            diff_bytes = diff.len(),
+            "Git diff retrieved"
+        );
+        Ok(diff)
+    }
 }

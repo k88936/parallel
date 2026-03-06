@@ -168,20 +168,64 @@ pub struct ClaimTaskResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerInstruction {
-    AssignTask { task: Task },
-    CancelTask { task_id: Uuid, reason: String },
-    UpdateTask { task_id: Uuid, instruction: String },
+    AssignTask {
+        task: Task,
+    },
+    CancelTask {
+        task_id: Uuid,
+        reason: String,
+    },
+    UpdateTask {
+        task_id: Uuid,
+        instruction: String,
+    },
+    ApproveIteration {
+        task_id: Uuid,
+    },
+    ProvideFeedback {
+        task_id: Uuid,
+        feedback: HumanFeedback,
+    },
+    AbortTask {
+        task_id: Uuid,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerEvent {
-    Heartbeat { running_tasks: Vec<Uuid> },
-    TaskStarted { task_id: Uuid },
-    TaskProgress { task_id: Uuid, message: String },
-    TaskCompleted { task_id: Uuid },
-    TaskFailed { task_id: Uuid, error: String },
-    TaskCancelled { task_id: Uuid },
+    Heartbeat {
+        running_tasks: Vec<Uuid>,
+    },
+    TaskStarted {
+        task_id: Uuid,
+    },
+    TaskProgress {
+        task_id: Uuid,
+        message: String,
+    },
+    TaskAwaitingReview {
+        task_id: Uuid,
+        messages: Vec<AgentMessage>,
+        diff: String,
+    },
+    TaskCompleted {
+        task_id: Uuid,
+    },
+    TaskFailed {
+        task_id: Uuid,
+        error: String,
+    },
+    TaskCancelled {
+        task_id: Uuid,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewData {
+    pub messages: Vec<AgentMessage>,
+    pub diff: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

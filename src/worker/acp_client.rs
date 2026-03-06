@@ -1,9 +1,12 @@
 use agent_client_protocol as acp;
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
+
+use crate::protocol::AgentMessage;
 
 #[derive(Debug)]
 struct RunningTerminal {
@@ -15,6 +18,7 @@ struct RunningTerminal {
 pub struct ACPClient {
     workdir: PathBuf,
     terminals: RwLock<HashMap<acp::TerminalId, Arc<RunningTerminal>>>,
+    messages: Arc<RwLock<Vec<AgentMessage>>>,
 }
 
 impl ACPClient {
@@ -24,7 +28,25 @@ impl ACPClient {
         Self {
             workdir,
             terminals: RwLock::new(HashMap::new()),
+            messages: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    pub async fn get_messages(&self) -> Vec<AgentMessage> {
+        self.messages.read().await.clone()
+    }
+
+    pub async fn clear_messages(&self) {
+        self.messages.write().await.clear();
+    }
+
+    async fn add_message(&self, role: &str, content: String) {
+        let message = AgentMessage {
+            timestamp: Utc::now(),
+            role: role.to_string(),
+            content,
+        };
+        self.messages.write().await.push(message);
     }
 
     fn resolve_path(&self, path: &PathBuf) -> PathBuf {
@@ -87,14 +109,33 @@ impl acp::Client for ACPClient {
     ) -> acp::Result<(), acp::Error> {
         match &args.update {
             acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk { content, .. }) => {
-                if let acp::ContentBlock::Text(text) = content {
-                    let preview = if text.text.len() > 50 {
-                        format!("{}...", &text.text[..50])
-                    } else {
-                        text.text.clone()
-                    };
-                    trace!(content_preview = %preview, "Agent message chunk");
-                    print!("{}", text.text);
+                match content {
+                    acp::ContentBlock::Text(text) => {
+                        let preview = if text.text.len() > 50 {
+                            format!("{}...", &text.text[..50])
+                        } else {
+                            text.text.clone()
+                        };
+                        trace!(content_preview = %preview, "Agent message chunk");
+                        print!("{}", text.text);
+                        self.add_message("assistant", text.text.clone()).await;
+                    }
+                    acp::ContentBlock::Image(img) => {
+                        self.add_message("assistant", format!("[Image: {}]", img.mime_type)).await;
+                    }
+                    acp::ContentBlock::Resource(res) => {
+                        let uri = match &res.resource {
+                            acp::EmbeddedResourceResource::TextResourceContents(text_res) => {
+                                text_res.uri.clone()
+                            }
+                            acp::EmbeddedResourceResource::BlobResourceContents(blob_res) => {
+                                blob_res.uri.clone()
+                            }
+                            _ => "unknown".to_string(),
+                        };
+                        self.add_message("assistant", format!("[Resource: {}]", uri)).await;
+                    }
+                    _ => {}
                 }
             }
             acp::SessionUpdate::ToolCall(update) => {
@@ -102,6 +143,8 @@ impl acp::Client for ACPClient {
                     tool_call_id = %update.tool_call_id,
                     "Tool call initiated"
                 );
+                let tool_info = format!("[Tool Call: {} - {}]", update.title, update.tool_call_id);
+                self.add_message("assistant", tool_info).await;
             }
             acp::SessionUpdate::ToolCallUpdate(update) => {
                 debug!(
@@ -114,13 +157,12 @@ impl acp::Client for ACPClient {
                     plan_entries = plan.entries.len(),
                     "Agent execution plan received"
                 );
-                for (i, entry) in plan.entries.iter().enumerate() {
-                    debug!(
-                        entry_index = i,
-                        entry_content = ?entry.content,
-                        "Plan entry"
-                    );
-                }
+                let plan_content = plan.entries
+                    .iter()
+                    .map(|e| format!("- {}", e.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                self.add_message("assistant", format!("[Plan]\n{}", plan_content)).await;
             }
             acp::SessionUpdate::CurrentModeUpdate(update) => {
                 info!(mode_id = %update.current_mode_id, "Session mode changed");
@@ -135,12 +177,14 @@ impl acp::Client for ACPClient {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
                     let preview: String = text.text.chars().take(50).collect();
                     trace!(thought_preview = %preview, "Agent thought");
+                    self.add_message("assistant", format!("[Thought] {}", text.text)).await;
                 }
             }
             acp::SessionUpdate::UserMessageChunk(chunk) => {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
                     let preview: String = text.text.chars().take(50).collect();
                     trace!(message_preview = %preview, "User message");
+                    self.add_message("user", text.text.clone()).await;
                 }
             }
             _ => {

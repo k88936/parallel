@@ -373,6 +373,23 @@ async fn test_submit_feedback() {
     let client = reqwest::Client::new();
 
     let resp = client
+        .post(&format!("{}/api/workers/register", server.url))
+        .json(&json!({
+            "name": "test-worker",
+            "capabilities": {
+                "has_git": true,
+                "has_opencode": true,
+                "supported_languages": []
+            },
+            "max_concurrent": 1
+        }))
+        .send()
+        .await
+        .unwrap();
+    let worker_data: WorkerInfo = resp.json().await.unwrap();
+    let worker_id = worker_data.id;
+
+    let resp = client
         .post(&format!("{}/api/tasks", server.url))
         .json(&json!({
             "repo_url": "git@github.com:test/repo.git",
@@ -383,6 +400,30 @@ async fn test_submit_feedback() {
         .unwrap();
     let data: CreateTaskResponse = resp.json().await.unwrap();
     let task_id = data.task_id;
+
+    let resp = client
+        .post(&format!("{}/api/workers/poll", server.url))
+        .json(&PollRequest { worker_id })
+        .send()
+        .await
+        .unwrap();
+    let poll_data: PollResponse = resp.json().await.unwrap();
+    assert!(!poll_data.instructions.is_empty());
+
+    let resp = client
+        .post(&format!("{}/api/workers/events", server.url))
+        .json(&PushEventsRequest {
+            worker_id,
+            events: vec![WorkerEvent::TaskAwaitingReview {
+                task_id,
+                messages: vec![],
+                diff: "test diff".to_string(),
+            }],
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let resp = client
         .post(&format!("{}/api/tasks/{}/feedback", server.url, task_id))

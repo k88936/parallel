@@ -3,7 +3,7 @@ use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
 
-use crate::protocol::{Task, TaskStatus, TaskPriority, WorkerInstruction, WorkerEvent};
+use crate::protocol::{Task, TaskStatus, TaskPriority, WorkerInstruction, WorkerEvent, HumanFeedback, FeedbackType, ReviewData};
 use crate::server::db::entity::{tasks, workers};
 
 pub struct TaskScheduler {
@@ -37,6 +37,7 @@ impl TaskScheduler {
             created_at: Set(now),
             updated_at: Set(now),
             claimed_by: Set(None),
+            review_data_json: Set(None),
         };
 
         tasks::Entity::insert(task)
@@ -231,6 +232,26 @@ impl TaskScheduler {
                     running_tasks.retain(|id| id != &task_id);
                     self.complete_iteration(&task_id, TaskStatus::Cancelled).await?;
                 }
+                WorkerEvent::TaskAwaitingReview { task_id, messages, diff } => {
+                    tracing::info!("Task {} awaiting review", task_id);
+                    
+                    let review_data = ReviewData {
+                        messages,
+                        diff,
+                    };
+                    let review_data_json = serde_json::to_string(&review_data)?;
+                    
+                    let task = tasks::Entity::find_by_id(task_id)
+                        .one(&self.db)
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
+                    
+                    let mut task_update: tasks::ActiveModel = task.into();
+                    task_update.status = Set(TaskStatus::AwaitingReview.as_str().to_string());
+                    task_update.review_data_json = Set(Some(review_data_json));
+                    task_update.updated_at = Set(now);
+                    task_update.update(&self.db).await?;
+                }
             }
         }
 
@@ -245,6 +266,45 @@ impl TaskScheduler {
         worker_update.update(&self.db).await?;
 
         Ok(())
+    }
+
+    pub async fn submit_feedback(&self, task_id: &Uuid, feedback: HumanFeedback) -> Result<()> {
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
+        
+        let worker_id = task.claimed_by
+            .ok_or_else(|| anyhow::anyhow!("Task not claimed by any worker"))?;
+        
+        let instruction = match feedback.feedback_type {
+            FeedbackType::Approve => WorkerInstruction::ApproveIteration { task_id: *task_id },
+            FeedbackType::RequestChanges => WorkerInstruction::ProvideFeedback {
+                task_id: *task_id,
+                feedback,
+            },
+            FeedbackType::Abort => WorkerInstruction::AbortTask {
+                task_id: *task_id,
+                reason: feedback.message.clone(),
+            },
+        };
+        
+        self.queue_instruction(worker_id, instruction).await
+    }
+
+    pub async fn get_review_data(&self, task_id: &Uuid) -> Result<Option<ReviewData>> {
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
+        
+        match task.review_data_json {
+            Some(json) => {
+                let review_data: ReviewData = serde_json::from_str(&json)?;
+                Ok(Some(review_data))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn queue_instruction(&self, worker_id: Uuid, instruction: WorkerInstruction) -> Result<()> {
