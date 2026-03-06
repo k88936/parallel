@@ -6,6 +6,7 @@ pub mod task_service;
 pub mod traits;
 pub mod worker_service;
 mod orphan_monitor_test;
+mod heartbeat_monitor_test;
 
 pub use coordinator::Coordinator;
 pub use event_processor::EventProcessor;

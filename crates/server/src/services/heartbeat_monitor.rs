@@ -41,7 +41,7 @@ impl HeartbeatMonitor {
         }
     }
 
-    async fn check_workers(&self) -> ServerResult<()> {
+    pub async fn check_workers(&self) -> ServerResult<()> {
         let stale_workers = self
             .worker_service
             .find_stale_workers(self.timeout_seconds)
