@@ -9,7 +9,7 @@ use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use crate::server::db::migration::Migrator;
-use crate::server::handlers::{task, worker, session};
+use crate::server::handlers::{task, worker};
 use crate::server::state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
@@ -32,7 +32,6 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/workers/heartbeat", post(worker::heartbeat))
         .route("/api/workers", get(worker::list_workers))
         .route("/api/tasks/claim", post(task::claim_task))
-        .route("/api/sessions", post(session::create_session))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

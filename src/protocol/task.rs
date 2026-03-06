@@ -103,26 +103,6 @@ pub struct Task {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub claimed_by: Option<Uuid>,
-    pub iterations: Vec<TaskIteration>,
-    pub current_iteration: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskIteration {
-    pub iteration_id: u32,
-    pub started_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub result: Option<IterationResult>,
-    pub human_feedback: Option<HumanFeedback>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IterationResult {
-    pub status: IterationStatus,
-    pub summary: String,
-    pub files_changed: Vec<String>,
-    pub commits: Vec<String>,
-    pub agent_messages: Vec<AgentMessage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

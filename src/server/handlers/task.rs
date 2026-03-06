@@ -12,7 +12,6 @@ use crate::server::state::AppState;
 #[derive(Debug, Deserialize)]
 pub struct UpdateTaskStatusRequest {
     pub status: TaskStatus,
-    pub result: Option<IterationResult>,
 }
 
 pub async fn create_task(
@@ -125,7 +124,7 @@ pub async fn update_task_status(
 ) -> Result<StatusCode, StatusCode> {
     match state
         .scheduler
-        .complete_iteration(&task_id, payload.status, payload.result)
+        .complete_iteration(&task_id, payload.status)
         .await
     {
         Ok(()) => {

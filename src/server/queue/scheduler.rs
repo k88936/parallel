@@ -3,8 +3,8 @@ use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
 
-use crate::protocol::{Task, TaskStatus, TaskPriority, TaskIteration, IterationResult};
-use crate::server::db::entity::{tasks, task_iterations};
+use crate::protocol::{Task, TaskStatus, TaskPriority, };
+use crate::server::db::entity::{tasks};
 
 pub struct TaskScheduler {
     db: DatabaseConnection,
@@ -37,7 +37,6 @@ impl TaskScheduler {
             created_at: Set(now),
             updated_at: Set(now),
             claimed_by: Set(None),
-            current_iteration: Set(0),
         };
 
         tasks::Entity::insert(task)
@@ -61,28 +60,12 @@ impl TaskScheduler {
 
         if let Some(task_model) = task {
             let task_id = task_model.id;
-            let new_iteration = task_model.current_iteration + 1;
 
             let mut task_update: tasks::ActiveModel = task_model.into();
             task_update.status = Set(TaskStatus::Claimed.as_str().to_string());
             task_update.claimed_by = Set(Some(*worker_id));
             task_update.updated_at = Set(now);
-            task_update.current_iteration = Set(new_iteration);
             task_update.update(&txn).await?;
-
-            let iteration = task_iterations::ActiveModel {
-                id: NotSet,
-                task_id: Set(task_id),
-                iteration_id: Set(new_iteration),
-                started_at: Set(now),
-                completed_at: Set(None),
-                result_json: Set(None),
-                human_feedback_json: Set(None),
-            };
-
-            task_iterations::Entity::insert(iteration)
-                .exec(&txn)
-                .await?;
 
             txn.commit().await?;
 
@@ -100,31 +83,6 @@ impl TaskScheduler {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
 
-        let iterations = task_iterations::Entity::find()
-            .filter(task_iterations::Column::TaskId.eq(*task_id))
-            .order_by_asc(task_iterations::Column::IterationId)
-            .all(&self.db)
-            .await?;
-
-        let iterations = iterations
-            .into_iter()
-            .map(|iter| {
-                let result = iter.result_json
-                    .map(|json| serde_json::from_str(&json).unwrap());
-
-                let human_feedback = iter.human_feedback_json
-                    .map(|json| serde_json::from_str(&json).unwrap());
-
-                TaskIteration {
-                    iteration_id: iter.iteration_id as u32,
-                    started_at: iter.started_at,
-                    completed_at: iter.completed_at,
-                    result,
-                    human_feedback,
-                }
-            })
-            .collect();
-
         Ok(Task {
             id: task_model.id,
             repo_url: task_model.repo_url,
@@ -138,8 +96,6 @@ impl TaskScheduler {
             created_at: task_model.created_at,
             updated_at: task_model.updated_at,
             claimed_by: task_model.claimed_by,
-            iterations,
-            current_iteration: task_model.current_iteration as u32,
         })
     }
 
@@ -193,8 +149,7 @@ impl TaskScheduler {
     pub async fn complete_iteration(
         &self,
         task_id: &Uuid,
-        status: TaskStatus,
-        result: Option<IterationResult>,
+        status: TaskStatus
     ) -> Result<()> {
         let now = Utc::now();
 
@@ -203,7 +158,6 @@ impl TaskScheduler {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
 
-        let current_iteration = task.current_iteration;
 
         let mut task_update: tasks::ActiveModel = task.into();
         task_update.status = Set(status.as_str().to_string());
@@ -214,22 +168,6 @@ impl TaskScheduler {
         }
         
         task_update.update(&self.db).await?;
-
-        if let Some(iteration_result) = result {
-            let iteration = task_iterations::Entity::find()
-                .filter(task_iterations::Column::TaskId.eq(*task_id))
-                .filter(task_iterations::Column::IterationId.eq(current_iteration))
-                .one(&self.db)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Iteration not found"))?;
-
-            let mut iteration_update: task_iterations::ActiveModel = iteration.into();
-            iteration_update.completed_at = Set(Some(now));
-            iteration_update.result_json = Set(Some(
-                serde_json::to_string(&iteration_result)?
-            ));
-            iteration_update.update(&self.db).await?;
-        }
 
         Ok(())
     }

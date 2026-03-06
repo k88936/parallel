@@ -12,12 +12,12 @@ struct RunningTerminal {
 }
 
 #[derive(Debug)]
-pub struct TaskClient {
+pub struct Executor {
     workdir: PathBuf,
     terminals: RwLock<HashMap<acp::TerminalId, Arc<RunningTerminal>>>,
 }
 
-impl TaskClient {
+impl Executor {
     #[instrument(skip_all, fields(workdir = %workdir.display()))]
     pub fn new(workdir: PathBuf) -> Self {
         debug!("Creating new TaskClient");
@@ -39,7 +39,7 @@ impl TaskClient {
 }
 
 #[async_trait::async_trait(?Send)]
-impl acp::Client for TaskClient {
+impl acp::Client for Executor {
     #[instrument(skip(self), fields(session_id = %args.session_id))]
     async fn request_permission(
         &self,

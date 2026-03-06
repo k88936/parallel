@@ -26,7 +26,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Tasks::CreatedAt).timestamp_with_time_zone().not_null())
                     .col(ColumnDef::new(Tasks::UpdatedAt).timestamp_with_time_zone().not_null())
                     .col(ColumnDef::new(Tasks::ClaimedBy).uuid())
-                    .col(ColumnDef::new(Tasks::CurrentIteration).integer().not_null().default(0))
                     .to_owned(),
             )
             .await?;
@@ -74,5 +73,4 @@ pub enum Tasks {
     CreatedAt,
     UpdatedAt,
     ClaimedBy,
-    CurrentIteration,
 }

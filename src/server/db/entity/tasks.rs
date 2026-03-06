@@ -15,25 +15,16 @@ pub struct Model {
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
     pub claimed_by: Option<Uuid>,
-    pub current_iteration: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::task_iterations::Entity")]
-    Iterations,
     #[sea_orm(
         belongs_to = "super::workers::Entity",
         from = "Column::ClaimedBy",
         to = "super::workers::Column::Id"
     )]
     Worker,
-}
-
-impl Related<super::task_iterations::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Iterations.def()
-    }
 }
 
 impl Related<super::workers::Entity> for Entity {

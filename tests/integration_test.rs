@@ -54,7 +54,6 @@ async fn test_full_task_lifecycle() {
     assert!(task.target_branch.starts_with("task/"));
     assert_eq!(task.base_branch, "main");
     assert!(task.claimed_by.is_none());
-    assert_eq!(task.current_iteration, 0);
 
     // 4. Cancel the task
     let cancel_response = client
@@ -162,10 +161,6 @@ async fn test_worker_registration_and_task_claiming() {
     assert_eq!(claimed_task.priority, TaskPriority::High);
     assert_eq!(claimed_task.status, TaskStatus::Claimed);
     assert_eq!(claimed_task.claimed_by, Some(worker_id));
-    assert_eq!(claimed_task.current_iteration, 1);
-    assert_eq!(claimed_task.iterations.len(), 1);
-    assert!(claimed_task.iterations[0].started_at <= chrono::Utc::now());
-    assert!(claimed_task.iterations[0].completed_at.is_none());
 
     // 4. Claim another task - should get normal priority
     let claim_response = client

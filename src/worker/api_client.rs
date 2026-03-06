@@ -5,16 +5,16 @@ use uuid::Uuid;
 
 use crate::protocol::{
     ClaimTaskRequest, ClaimTaskResponse, CreateTaskRequest, CreateTaskResponse,
-    HeartbeatRequest, HeartbeatResponse, IterationResult, RegisterWorkerRequest,
+    HeartbeatRequest, HeartbeatResponse, RegisterWorkerRequest,
     Task, TaskStatus, WorkerCapabilities, WorkerInfo,
 };
 
-pub struct ServerClient {
+pub struct APIClient {
     client: Client,
     base_url: String,
 }
 
-impl ServerClient {
+impl APIClient {
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -115,12 +115,11 @@ impl ServerClient {
     pub async fn report_task_status(
         &self,
         task_id: Uuid,
-        status: TaskStatus,
-        result: Option<IterationResult>,
+        status: TaskStatus
     ) -> Result<()> {
         let url = format!("{}/api/tasks/{}/status", self.base_url, task_id);
 
-        let request = UpdateTaskStatusRequest { status, result };
+        let request = UpdateTaskStatusRequest { status };
 
         let response = self
             .client
@@ -189,5 +188,4 @@ impl ServerClient {
 #[derive(Debug, serde::Serialize)]
 struct UpdateTaskStatusRequest {
     status: TaskStatus,
-    result: Option<IterationResult>,
 }

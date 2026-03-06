@@ -1,7 +1,7 @@
-use crate::protocol::{IterationResult, IterationStatus, Task as ProtocolTask, TaskStatus, WorkerCapabilities};
-use crate::worker::task_client::TaskClient;
+use crate::protocol::{Task as ProtocolTask, TaskStatus, WorkerCapabilities};
+use crate::worker::executor::Executor;
 use crate::worker::git::GitOps;
-use crate::worker::server_client::ServerClient;
+use crate::worker::api_client::APIClient;
 use crate::worker::task::Task;
 use agent_client_protocol::{Agent as _, ClientCapabilities as AcpClientCapabilities, FileSystemCapability, ContentBlock};
 use anyhow::{Context, Result};
@@ -18,7 +18,7 @@ pub struct Worker {
     agent_path: PathBuf,
     max_concurrent: usize,
     semaphore: Arc<Semaphore>,
-    server_client: Arc<ServerClient>,
+    api_client: Arc<APIClient>,
     worker_id: Uuid,
     ssh_key_path: PathBuf,
 }
@@ -36,7 +36,7 @@ impl Worker {
             agent_path,
             max_concurrent,
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            server_client: Arc::new(ServerClient::new(server_url)),
+            api_client: Arc::new(APIClient::new(server_url)),
             worker_id: Uuid::nil(),
             ssh_key_path,
         }
@@ -46,7 +46,7 @@ impl Worker {
         let capabilities = WorkerCapabilities::default();
         
         let worker_info = self
-            .server_client
+            .api_client
             .register(name.to_string(), capabilities, self.max_concurrent)
             .await
             .context("Failed to register with server")?;
@@ -72,7 +72,7 @@ impl Worker {
         loop {
             tokio::select! {
                 _ = heartbeat_interval.tick() => {
-                    if let Err(e) = self.server_client
+                    if let Err(e) = self.api_client
                         .heartbeat(self.worker_id, current_task)
                         .await
                     {
@@ -100,7 +100,7 @@ impl Worker {
     }
 
     async fn try_claim_and_execute(&self) -> Result<Option<Uuid>> {
-        let task = self.server_client.claim_task(self.worker_id).await?;
+        let task = self.api_client.claim_task(self.worker_id).await?;
 
         if let Some(protocol_task) = task {
             let task_id = protocol_task.id;
@@ -113,37 +113,19 @@ impl Worker {
 
             let result = self.execute_task_inner(&worker_task).await;
 
-            let (status, iteration_result) = match &result {
+            let status = match &result {
                 Ok(()) => {
                     info!("Task {} completed successfully", task_id);
-                    (
-                        TaskStatus::Completed,
-                        Some(IterationResult {
-                            status: IterationStatus::Success,
-                            summary: format!("Task completed: {}", worker_task.description),
-                            files_changed: vec![],
-                            commits: vec![format!("Implement: {}", worker_task.description)],
-                            agent_messages: vec![],
-                        }),
-                    )
+                    TaskStatus::Completed
                 }
                 Err(e) => {
                     error!("Task {} failed: {}", task_id, e);
-                    (
-                        TaskStatus::Completed,
-                        Some(IterationResult {
-                            status: IterationStatus::Failed,
-                            summary: format!("Task failed: {}", e),
-                            files_changed: vec![],
-                            commits: vec![],
-                            agent_messages: vec![],
-                        }),
-                    )
+                    TaskStatus::Cancelled
                 }
             };
 
-            if let Err(e) = self.server_client
-                .report_task_status(task_id, status, iteration_result)
+            if let Err(e) = self.api_client
+                .report_task_status(task_id, status)
                 .await
             {
                 error!("Failed to report task status: {}", e);
@@ -209,7 +191,7 @@ impl Worker {
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
 
-        let client = TaskClient::new(workdir.clone());
+        let client = Executor::new(workdir.clone());
 
         let local_set = tokio::task::LocalSet::new();
         local_set
