@@ -160,6 +160,9 @@ impl TaskRunner {
                                                 }
                                                 TaskInstruction::Iterate { feedback } => {
                                                     tracing::info!("Task {} iterating with feedback", self.task_id);
+                                                    event_tx.send(WorkerEvent::TaskStarted {
+                                                        task_id: self.task_id,
+                                                    }).await?;
                                                     current_prompt = format!(
                                                         "Human feedback: {}\n\nPlease improve the implementation based on this feedback.",
                                                         feedback.message

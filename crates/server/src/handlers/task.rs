@@ -128,8 +128,15 @@ pub async fn submit_feedback(
         Ok(task) => {
             match task.claimed_by {
                 Some(worker_id) => {
-                    match coordinator.queue_feedback(worker_id, task_id, feedback).await {
-                        Ok(()) => Ok(StatusCode::NO_CONTENT),
+                    match coordinator.queue_feedback(worker_id, task_id, feedback.clone()).await {
+                        Ok(()) => {
+                            if matches!(feedback.feedback_type, parallel_protocol::FeedbackType::RequestChanges) {
+                                if let Err(e) = task_service.update_status(&task_id, TaskStatus::PendingRework).await {
+                                    tracing::error!("Failed to update task {} status to PendingRework: {}", task_id, e);
+                                }
+                            }
+                            Ok(StatusCode::NO_CONTENT)
+                        }
                         Err(e) => {
                             tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
                             Err(StatusCode::INTERNAL_SERVER_ERROR)
