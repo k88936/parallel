@@ -8,6 +8,7 @@ use uuid::Uuid;
 use parallel_protocol::*;
 
 use crate::errors::ServerError;
+use crate::services::traits::TaskListParams;
 use crate::state::AppState;
 
 pub async fn create_task(
@@ -24,6 +25,7 @@ pub async fn create_task(
     match state
         .task_service
         .create(
+            payload.title,
             payload.repo_url,
             payload.description,
             base_branch,
@@ -46,15 +48,28 @@ pub async fn list_tasks(
     State(state): State<AppState>,
     Query(query): Query<ListTasksQuery>,
 ) -> Result<Json<TaskListResponse>, StatusCode> {
-    let limit = query.limit.map(|l| l as u64);
-    let offset = query.offset.map(|o| o as u64);
-    let status = query.status;
+    let params = TaskListParams {
+        status: query.status,
+        priority: query.priority,
+        repo_url: query.repo_url,
+        worker_id: query.worker_id,
+        search: query.search,
+        created_after: query.created_after,
+        created_before: query.created_before,
+        sort_by: query.sort_by,
+        sort_direction: query.sort_direction,
+        cursor: query.cursor,
+        limit: query.limit.map(|l| l as u64),
+        offset: query.offset.map(|o| o as u64),
+    };
 
-    match state.task_service.list(status, limit, offset).await {
-        Ok(tasks) => {
-            let total = state.task_service.count(status).await.unwrap_or(0);
-            Ok(Json(TaskListResponse { tasks, total }))
-        }
+    match state.task_service.list(params).await {
+        Ok(result) => Ok(Json(TaskListResponse {
+            tasks: result.tasks,
+            total: result.total,
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+        })),
         Err(e) => {
             tracing::error!("Failed to list tasks: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)

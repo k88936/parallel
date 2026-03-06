@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
@@ -8,7 +9,7 @@ use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
 
 use crate::db::entity::tasks;
 use crate::errors::{ServerError, ServerResult};
-use crate::services::traits::TaskServiceTrait;
+use crate::services::traits::{TaskListParams, TaskListResult, TaskServiceTrait};
 
 pub struct TaskService {
     db: DatabaseConnection,
@@ -20,10 +21,45 @@ impl TaskService {
     }
 }
 
+fn model_to_task(t: tasks::Model) -> Task {
+    Task {
+        id: t.id,
+        title: t.title,
+        repo_url: t.repo_url,
+        description: t.description,
+        base_branch: t.base_branch,
+        target_branch: t.target_branch,
+        status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
+        priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        claimed_by: t.claimed_by,
+        ssh_key: t.ssh_key,
+        max_execution_time: t.max_execution_time,
+    }
+}
+
+fn decode_cursor(cursor: &str) -> Option<(String, Uuid)> {
+    let decoded = STANDARD.decode(cursor).ok()?;
+    let decoded_str = String::from_utf8(decoded).ok()?;
+    let parts: Vec<&str> = decoded_str.split('|').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    let value = parts[0].to_string();
+    let id = Uuid::parse_str(parts[1]).ok()?;
+    Some((value, id))
+}
+
+fn encode_cursor(value: &str, id: Uuid) -> String {
+    STANDARD.encode(format!("{}|{}", value, id))
+}
+
 #[async_trait]
 impl TaskServiceTrait for TaskService {
     async fn create(
         &self,
+        title: String,
         repo_url: String,
         description: String,
         base_branch: String,
@@ -37,6 +73,7 @@ impl TaskServiceTrait for TaskService {
 
         let task = tasks::ActiveModel {
             id: Set(task_id),
+            title: Set(title),
             repo_url: Set(repo_url),
             description: Set(description),
             base_branch: Set(base_branch),
@@ -62,60 +99,137 @@ impl TaskServiceTrait for TaskService {
             .await?
             .ok_or_else(|| ServerError::TaskNotFound(*task_id))?;
 
-        Ok(Task {
-            id: task.id,
-            repo_url: task.repo_url,
-            description: task.description,
-            base_branch: task.base_branch,
-            target_branch: task.target_branch,
-            status: TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created),
-            priority: TaskPriority::from_i32(task.priority).unwrap_or(TaskPriority::Normal),
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            claimed_by: task.claimed_by,
-            ssh_key: task.ssh_key,
-            max_execution_time: task.max_execution_time,
-        })
+        Ok(model_to_task(task))
     }
 
-    async fn list(
-        &self,
-        status: Option<TaskStatus>,
-        limit: Option<u64>,
-        offset: Option<u64>,
-    ) -> Result<Vec<Task>> {
+    async fn list(&self, params: TaskListParams) -> Result<TaskListResult> {
+        let limit = params.limit.unwrap_or(50);
+        let fetch_limit = limit + 1;
+
         let mut query = tasks::Entity::find();
 
-        if let Some(s) = status {
+        if let Some(s) = params.status {
             query = query.filter(tasks::Column::Status.eq(s.as_str()));
         }
 
-        let tasks = query
-            .order_by_desc(tasks::Column::CreatedAt)
-            .limit(limit.unwrap_or(50))
-            .offset(offset.unwrap_or(0))
-            .all(&self.db)
-            .await?;
-
-        let mut result = Vec::new();
-        for task in tasks {
-            result.push(Task {
-                id: task.id,
-                repo_url: task.repo_url,
-                description: task.description,
-                base_branch: task.base_branch,
-                target_branch: task.target_branch,
-                status: TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created),
-                priority: TaskPriority::from_i32(task.priority).unwrap_or(TaskPriority::Normal),
-                created_at: task.created_at,
-                updated_at: task.updated_at,
-                claimed_by: task.claimed_by,
-                ssh_key: task.ssh_key,
-                max_execution_time: task.max_execution_time,
-            });
+        if let Some(p) = params.priority {
+            query = query.filter(tasks::Column::Priority.eq(p.as_i32()));
         }
 
-        Ok(result)
+        if let Some(ref repo) = params.repo_url {
+            query = query.filter(tasks::Column::RepoUrl.eq(repo));
+        }
+
+        if let Some(worker_id) = params.worker_id {
+            query = query.filter(tasks::Column::ClaimedBy.eq(worker_id));
+        }
+
+        if let Some(ref search) = params.search {
+            let pattern = format!("%{}%", search);
+            query = query.filter(
+                Condition::any()
+                    .add(tasks::Column::Title.like(&pattern))
+                    .add(tasks::Column::Description.like(&pattern)),
+            );
+        }
+
+        if let Some(after) = params.created_after {
+            query = query.filter(tasks::Column::CreatedAt.gte(after));
+        }
+
+        if let Some(before) = params.created_before {
+            query = query.filter(tasks::Column::CreatedAt.lte(before));
+        }
+
+        let sort_by = params.sort_by.as_deref().unwrap_or("created_at");
+        let sort_direction = params.sort_direction.as_deref().unwrap_or("desc");
+        let is_desc = sort_direction == "desc";
+
+        let (sort_column, cursor_value) = match sort_by {
+            "created_at" => (tasks::Column::CreatedAt, true),
+            "updated_at" => (tasks::Column::UpdatedAt, true),
+            "priority" => (tasks::Column::Priority, true),
+            "status" => (tasks::Column::Status, false),
+            _ => (tasks::Column::CreatedAt, true),
+        };
+
+        if let Some(ref cursor) = params.cursor {
+            if let Some((value, id)) = decode_cursor(cursor) {
+                if cursor_value {
+                    if let Ok(ts) = value.parse::<i64>() {
+                        let dt = chrono::DateTime::from_timestamp(ts, 0).unwrap_or(Utc::now());
+                        if is_desc {
+                            query = query.filter(
+                                Condition::any()
+                                    .add(sort_column.lt(dt))
+                                    .add(
+                                        Condition::all()
+                                            .add(sort_column.eq(dt))
+                                            .add(tasks::Column::Id.lt(id)),
+                                    ),
+                            );
+                        } else {
+                            query = query.filter(
+                                Condition::any()
+                                    .add(sort_column.gt(dt))
+                                    .add(
+                                        Condition::all()
+                                            .add(sort_column.eq(dt))
+                                            .add(tasks::Column::Id.gt(id)),
+                                    ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        if is_desc {
+            query = query.order_by_desc(sort_column).order_by_desc(tasks::Column::Id);
+        } else {
+            query = query.order_by_asc(sort_column).order_by_asc(tasks::Column::Id);
+        }
+
+        let db_tasks = query.limit(fetch_limit).all(&self.db).await?;
+
+        let has_more = db_tasks.len() > limit as usize;
+        let tasks: Vec<Task> = db_tasks
+            .into_iter()
+            .take(limit as usize)
+            .map(model_to_task)
+            .collect();
+
+        let next_cursor = if has_more {
+            if let Some(last) = tasks.last() {
+                let value = match sort_by {
+                    "created_at" => last.created_at.timestamp().to_string(),
+                    "updated_at" => last.updated_at.timestamp().to_string(),
+                    "priority" => last.priority.as_i32().to_string(),
+                    "status" => last.status.as_str().to_string(),
+                    _ => last.created_at.timestamp().to_string(),
+                };
+                Some(encode_cursor(&value, last.id))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let count_query = tasks::Entity::find();
+        let count_query = if let Some(s) = params.status {
+            count_query.filter(tasks::Column::Status.eq(s.as_str()))
+        } else {
+            count_query
+        };
+        let total = count_query.count(&self.db).await?;
+
+        Ok(TaskListResult {
+            tasks,
+            total,
+            next_cursor,
+            has_more,
+        })
     }
 
     async fn count(&self, status: Option<TaskStatus>) -> Result<u64> {
@@ -213,20 +327,7 @@ impl TaskServiceTrait for TaskService {
             .one(&self.db)
             .await?;
 
-        Ok(task.map(|t| Task {
-            id: t.id,
-            repo_url: t.repo_url,
-            description: t.description,
-            base_branch: t.base_branch,
-            target_branch: t.target_branch,
-            status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
-            priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
-            created_at: t.created_at,
-            updated_at: t.updated_at,
-            claimed_by: t.claimed_by,
-            ssh_key: t.ssh_key,
-            max_execution_time: t.max_execution_time,
-        }))
+        Ok(task.map(model_to_task))
     }
 
     async fn requeue_task(&self, task_id: &Uuid) -> ServerResult<()> {
@@ -273,31 +374,13 @@ impl TaskServiceTrait for TaskService {
             TaskStatus::PendingRework.as_str(),
         ];
 
-        let tasks = tasks::Entity::find()
+        let db_tasks = tasks::Entity::find()
             .filter(tasks::Column::Status.is_in(non_terminal_statuses))
             .filter(tasks::Column::ClaimedBy.is_null())
             .all(&self.db)
             .await?;
 
-        let result: Vec<Task> = tasks
-            .into_iter()
-            .map(|t| Task {
-                id: t.id,
-                repo_url: t.repo_url,
-                description: t.description,
-                base_branch: t.base_branch,
-                target_branch: t.target_branch,
-                status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
-                priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
-                created_at: t.created_at,
-                updated_at: t.updated_at,
-                claimed_by: t.claimed_by,
-                ssh_key: t.ssh_key,
-                max_execution_time: t.max_execution_time,
-            })
-            .collect();
-
-        Ok(result)
+        Ok(db_tasks.into_iter().map(model_to_task).collect())
     }
 
     async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>> {
@@ -307,31 +390,18 @@ impl TaskServiceTrait for TaskService {
             TaskStatus::Claimed.as_str(),
         ];
 
-        let tasks = tasks::Entity::find()
+        let db_tasks = tasks::Entity::find()
             .filter(tasks::Column::Status.is_in(active_statuses))
             .all(&self.db)
             .await?;
 
-        let result: Vec<Task> = tasks
+        let result: Vec<Task> = db_tasks
             .into_iter()
             .filter(|t| {
                 let elapsed = (now - t.created_at).num_seconds();
                 elapsed > t.max_execution_time
             })
-            .map(|t| Task {
-                id: t.id,
-                repo_url: t.repo_url,
-                description: t.description,
-                base_branch: t.base_branch,
-                target_branch: t.target_branch,
-                status: TaskStatus::from_str(&t.status).unwrap_or(TaskStatus::Created),
-                priority: TaskPriority::from_i32(t.priority).unwrap_or(TaskPriority::Normal),
-                created_at: t.created_at,
-                updated_at: t.updated_at,
-                claimed_by: t.claimed_by,
-                ssh_key: t.ssh_key,
-                max_execution_time: t.max_execution_time,
-            })
+            .map(model_to_task)
             .collect();
 
         Ok(result)

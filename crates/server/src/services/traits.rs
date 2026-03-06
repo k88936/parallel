@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use parallel_protocol::{
@@ -9,10 +10,33 @@ use parallel_protocol::{
 
 use crate::errors::ServerResult;
 
+pub struct TaskListParams {
+    pub status: Option<TaskStatus>,
+    pub priority: Option<TaskPriority>,
+    pub repo_url: Option<String>,
+    pub worker_id: Option<Uuid>,
+    pub search: Option<String>,
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub sort_by: Option<String>,
+    pub sort_direction: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+}
+
+pub struct TaskListResult {
+    pub tasks: Vec<Task>,
+    pub total: u64,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
 #[async_trait]
 pub trait TaskServiceTrait: Send + Sync {
     async fn create(
         &self,
+        title: String,
         repo_url: String,
         description: String,
         base_branch: String,
@@ -24,12 +48,7 @@ pub trait TaskServiceTrait: Send + Sync {
 
     async fn get(&self, task_id: &Uuid) -> ServerResult<Task>;
 
-    async fn list(
-        &self,
-        status: Option<TaskStatus>,
-        limit: Option<u64>,
-        offset: Option<u64>,
-    ) -> Result<Vec<Task>>;
+    async fn list(&self, params: TaskListParams) -> Result<TaskListResult>;
 
     async fn count(&self, status: Option<TaskStatus>) -> Result<u64>;
 

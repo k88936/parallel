@@ -48,6 +48,7 @@ mod tests {
     impl TaskServiceTrait for MockTaskService {
         async fn create(
             &self,
+            _title: String,
             _repo_url: String,
             _description: String,
             _base_branch: String,
@@ -65,11 +66,14 @@ mod tests {
 
         async fn list(
             &self,
-            _status: Option<TaskStatus>,
-            _limit: Option<u64>,
-            _offset: Option<u64>,
-        ) -> anyhow::Result<Vec<Task>> {
-            Ok(Vec::new())
+            _params: crate::services::traits::TaskListParams,
+        ) -> anyhow::Result<crate::services::traits::TaskListResult> {
+            Ok(crate::services::traits::TaskListResult {
+                tasks: Vec::new(),
+                total: 0,
+                next_cursor: None,
+                has_more: false,
+            })
         }
 
         async fn count(&self, _status: Option<TaskStatus>) -> anyhow::Result<u64> {
@@ -238,6 +242,7 @@ mod tests {
     fn create_test_task(id: Uuid, claimed_by: Option<Uuid>) -> Task {
         Task {
             id,
+            title: "Test Task".to_string(),
             repo_url: "https://github.com/test/repo".to_string(),
             description: "Test task".to_string(),
             base_branch: "main".to_string(),

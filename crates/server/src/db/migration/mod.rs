@@ -6,6 +6,7 @@ mod m20240306_000003_update_workers_for_instructions;
 mod m20240306_000004_add_review_data_to_tasks;
 mod m20240307_000005_add_ssh_key_to_tasks;
 mod m20240308_000006_add_max_execution_time_to_tasks;
+mod m20240309_000007_add_title_to_tasks;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240306_000004_add_review_data_to_tasks::Migration),
             Box::new(m20240307_000005_add_ssh_key_to_tasks::Migration),
             Box::new(m20240308_000006_add_max_execution_time_to_tasks::Migration),
+            Box::new(m20240309_000007_add_title_to_tasks::Migration),
         ]
     }
 }

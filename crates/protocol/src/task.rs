@@ -81,6 +81,7 @@ impl Default for TaskPriority {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: Uuid,
+    pub title: String,
     pub repo_url: String,
     pub description: String,
     pub base_branch: String,
