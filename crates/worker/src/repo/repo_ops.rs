@@ -25,7 +25,7 @@ fn create_remote_callbacks(ssh_key: &str) -> RemoteCallbacks<'_> {
     callbacks
 }
 
-fn create_fetch_options<'a>(callbacks: RemoteCallbacks<'a>) -> FetchOptions<'a> {
+fn create_fetch_options(callbacks: RemoteCallbacks) -> FetchOptions {
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
     fo
