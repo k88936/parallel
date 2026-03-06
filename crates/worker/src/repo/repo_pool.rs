@@ -79,11 +79,8 @@ impl RepoPool {
                 slot_id, repo_hash, task_id
             );
 
-            let git = GitOps::open(&slot_path)?;
-            git.fetch(ssh_key)?;
-            git.force_checkout(base_branch)?;
-            git.delete_branch_if_exists(target_branch)?;
-            git.create_branch(target_branch)?;
+            self.prepare_existing_slot(&slot_path, base_branch, target_branch, ssh_key)
+                .await?;
         } else {
             info!(
                 "Creating new slot {} for repo {}, task {}",

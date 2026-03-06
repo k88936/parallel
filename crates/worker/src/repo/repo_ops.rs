@@ -227,12 +227,6 @@ impl GitOps {
         self.repo
             .checkout_tree(tree.as_object(), None)
             .context("Failed to checkout tree")?;
-
-        let branch_ref = format!("refs/heads/{}", branch);
-        self.repo
-            .set_head(&branch_ref)
-            .context("Failed to set HEAD")?;
-
         Ok(())
     }
 
