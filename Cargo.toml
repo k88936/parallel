@@ -12,7 +12,6 @@ name = "server"
 path = "src/bin/server.rs"
 
 [dependencies]
-parallel-protocol = { path = "crates/protocol" }
 parallel-server = { path = "crates/server" }
 parallel-worker = { path = "crates/worker" }
 
