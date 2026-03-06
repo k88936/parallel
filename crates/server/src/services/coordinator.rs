@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
 
@@ -5,6 +6,7 @@ use parallel_protocol::{FeedbackType, HumanFeedback, WorkerInstruction};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};
+use crate::services::traits::CoordinatorTrait;
 
 pub struct Coordinator {
     db: DatabaseConnection,
@@ -14,8 +16,11 @@ impl Coordinator {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
+}
 
-    pub async fn queue_instruction(
+#[async_trait]
+impl CoordinatorTrait for Coordinator {
+    async fn queue_instruction(
         &self,
         worker_id: Uuid,
         instruction: WorkerInstruction,
@@ -36,7 +41,7 @@ impl Coordinator {
         Ok(())
     }
 
-    pub async fn get_pending_instructions(
+    async fn get_pending_instructions(
         &self,
         worker_id: &Uuid,
     ) -> ServerResult<Vec<WorkerInstruction>> {
@@ -57,7 +62,7 @@ impl Coordinator {
         Ok(pending)
     }
 
-    pub async fn queue_feedback(
+    async fn queue_feedback(
         &self,
         worker_id: Uuid,
         task_id: Uuid,
@@ -77,7 +82,7 @@ impl Coordinator {
         self.queue_instruction(worker_id, instruction).await
     }
 
-    pub async fn queue_cancellation(
+    async fn queue_cancellation(
         &self,
         worker_id: Uuid,
         task_id: Uuid,

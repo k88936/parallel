@@ -1,29 +1,32 @@
-use sea_orm::*;
+use async_trait::async_trait;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use parallel_protocol::{ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
-use crate::services::{TaskService, WorkerService};
+use crate::services::traits::{EventProcessorTrait, TaskServiceTrait, WorkerServiceTrait};
 
 pub struct EventProcessor {
-    task_service: TaskService,
-    worker_service: WorkerService,
+    task_service: Arc<dyn TaskServiceTrait>,
+    worker_service: Arc<dyn WorkerServiceTrait>,
 }
 
 impl EventProcessor {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(
+        task_service: Arc<dyn TaskServiceTrait>,
+        worker_service: Arc<dyn WorkerServiceTrait>,
+    ) -> Self {
         Self {
-            task_service: TaskService::new(db.clone()),
-            worker_service: WorkerService::new(db),
+            task_service,
+            worker_service,
         }
     }
+}
 
-    pub async fn process_events(
-        &self,
-        worker_id: &Uuid,
-        events: Vec<WorkerEvent>,
-    ) -> ServerResult<()> {
+#[async_trait]
+impl EventProcessorTrait for EventProcessor {
+    async fn process_events(&self, worker_id: &Uuid, events: Vec<WorkerEvent>) -> ServerResult<()> {
         let mut running_tasks = self.worker_service.get_running_tasks(worker_id).await?;
 
         for event in events {

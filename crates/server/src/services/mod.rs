@@ -3,6 +3,7 @@ pub mod event_processor;
 pub mod heartbeat_monitor;
 pub mod orphan_monitor;
 pub mod task_service;
+pub mod traits;
 pub mod worker_service;
 
 pub use coordinator::Coordinator;
@@ -10,4 +11,5 @@ pub use event_processor::EventProcessor;
 pub use heartbeat_monitor::spawn_heartbeat_monitor;
 pub use orphan_monitor::spawn_orphan_monitor;
 pub use task_service::TaskService;
+pub use traits::{CoordinatorTrait, EventProcessorTrait, TaskServiceTrait, WorkerServiceTrait};
 pub use worker_service::WorkerService;

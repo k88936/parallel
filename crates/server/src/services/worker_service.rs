@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
@@ -6,6 +7,7 @@ use parallel_protocol::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};
+use crate::services::traits::WorkerServiceTrait;
 
 pub struct WorkerService {
     db: DatabaseConnection,
@@ -15,8 +17,11 @@ impl WorkerService {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
+}
 
-    pub async fn register(
+#[async_trait]
+impl WorkerServiceTrait for WorkerService {
+    async fn register(
         &self,
         name: String,
         capabilities: WorkerCapabilities,
@@ -50,7 +55,7 @@ impl WorkerService {
         })
     }
 
-    pub async fn get(&self, worker_id: &Uuid) -> ServerResult<WorkerInfo> {
+    async fn get(&self, worker_id: &Uuid) -> ServerResult<WorkerInfo> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
@@ -67,7 +72,7 @@ impl WorkerService {
         })
     }
 
-    pub async fn list(&self) -> ServerResult<Vec<WorkerInfo>> {
+    async fn list(&self) -> ServerResult<Vec<WorkerInfo>> {
         let workers = workers::Entity::find().all(&self.db).await?;
 
         let worker_infos: Vec<WorkerInfo> = workers
@@ -88,7 +93,7 @@ impl WorkerService {
         Ok(worker_infos)
     }
 
-    pub async fn update_heartbeat(
+    async fn update_heartbeat(
         &self,
         worker_id: &Uuid,
         running_tasks: Vec<Uuid>,
@@ -112,7 +117,7 @@ impl WorkerService {
         Ok(())
     }
 
-    pub async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()> {
+    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
@@ -129,7 +134,7 @@ impl WorkerService {
         Ok(())
     }
 
-    pub async fn has_available_slot(&self, worker_id: &Uuid) -> ServerResult<bool> {
+    async fn has_available_slot(&self, worker_id: &Uuid) -> ServerResult<bool> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
@@ -139,7 +144,7 @@ impl WorkerService {
         Ok(running_tasks.len() < worker.max_concurrent as usize)
     }
 
-    pub async fn get_running_tasks(&self, worker_id: &Uuid) -> ServerResult<Vec<Uuid>> {
+    async fn get_running_tasks(&self, worker_id: &Uuid) -> ServerResult<Vec<Uuid>> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
@@ -148,7 +153,7 @@ impl WorkerService {
         Ok(serde_json::from_str(&worker.current_tasks_json)?)
     }
 
-    pub async fn update_status(&self, worker_id: &Uuid, status: WorkerStatus) -> ServerResult<()> {
+    async fn update_status(&self, worker_id: &Uuid, status: WorkerStatus) -> ServerResult<()> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
@@ -161,7 +166,7 @@ impl WorkerService {
         Ok(())
     }
 
-    pub async fn find_stale_workers(
+    async fn find_stale_workers(
         &self,
         timeout_seconds: i64,
     ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
@@ -186,7 +191,7 @@ impl WorkerService {
         Ok(result)
     }
 
-    pub async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()> {
+    async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?

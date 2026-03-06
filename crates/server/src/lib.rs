@@ -4,6 +4,8 @@ pub mod handlers;
 pub mod services;
 pub mod state;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use axum::{
     Router,
@@ -16,7 +18,10 @@ use tracing::info;
 
 use db::migration::Migrator;
 use handlers::{task, worker};
-use services::{spawn_heartbeat_monitor, spawn_orphan_monitor};
+use services::{
+    Coordinator, EventProcessor, TaskService, WorkerService, spawn_heartbeat_monitor,
+    spawn_orphan_monitor,
+};
 use state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
@@ -26,7 +31,20 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     info!("Running database migrations...");
     Migrator::up(&db, None).await?;
 
-    let state = AppState::new(db);
+    let task_service = Arc::new(TaskService::new(db.clone()));
+    let worker_service = Arc::new(WorkerService::new(db.clone()));
+    let coordinator = Arc::new(Coordinator::new(db.clone()));
+    let event_processor = Arc::new(EventProcessor::new(
+        task_service.clone(),
+        worker_service.clone(),
+    ));
+
+    let state = AppState::new(
+        task_service.clone(),
+        worker_service.clone(),
+        coordinator,
+        event_processor,
+    );
 
     let heartbeat_timeout: i64 = std::env::var("HEARTBEAT_TIMEOUT_SECONDS")
         .ok()
@@ -43,8 +61,13 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
 
-    spawn_heartbeat_monitor(state.clone(), heartbeat_timeout, heartbeat_interval);
-    spawn_orphan_monitor(state.clone(), orphan_check_interval);
+    spawn_heartbeat_monitor(
+        task_service.clone(),
+        worker_service.clone(),
+        heartbeat_timeout,
+        heartbeat_interval,
+    );
+    spawn_orphan_monitor(task_service, worker_service, orphan_check_interval);
 
     let app = Router::new()
         .route("/api/tasks", post(task::create_task))

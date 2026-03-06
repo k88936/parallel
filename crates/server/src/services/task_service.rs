@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
@@ -7,6 +8,7 @@ use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
 
 use crate::db::entity::tasks;
 use crate::errors::{ServerError, ServerResult};
+use crate::services::traits::TaskServiceTrait;
 
 pub struct TaskService {
     db: DatabaseConnection,
@@ -16,8 +18,11 @@ impl TaskService {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
+}
 
-    pub async fn create(
+#[async_trait]
+impl TaskServiceTrait for TaskService {
+    async fn create(
         &self,
         repo_url: String,
         description: String,
@@ -51,7 +56,7 @@ impl TaskService {
         Ok(task_id)
     }
 
-    pub async fn get(&self, task_id: &Uuid) -> ServerResult<Task> {
+    async fn get(&self, task_id: &Uuid) -> ServerResult<Task> {
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
             .await?
@@ -73,7 +78,7 @@ impl TaskService {
         })
     }
 
-    pub async fn list(
+    async fn list(
         &self,
         status: Option<TaskStatus>,
         limit: Option<u64>,
@@ -113,7 +118,7 @@ impl TaskService {
         Ok(result)
     }
 
-    pub async fn count(&self, status: Option<TaskStatus>) -> Result<u64> {
+    async fn count(&self, status: Option<TaskStatus>) -> Result<u64> {
         let mut query = tasks::Entity::find();
 
         if let Some(s) = status {
@@ -123,7 +128,7 @@ impl TaskService {
         Ok(query.count(&self.db).await?)
     }
 
-    pub async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
+    async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -138,11 +143,7 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn set_claimed_by(
-        &self,
-        task_id: &Uuid,
-        worker_id: Option<Uuid>,
-    ) -> ServerResult<()> {
+    async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -157,7 +158,7 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
+    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -176,11 +177,7 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn set_review_data(
-        &self,
-        task_id: &Uuid,
-        review_data: ReviewData,
-    ) -> ServerResult<()> {
+    async fn set_review_data(&self, task_id: &Uuid, review_data: ReviewData) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -196,7 +193,7 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn get_review_data(&self, task_id: &Uuid) -> ServerResult<Option<ReviewData>> {
+    async fn get_review_data(&self, task_id: &Uuid) -> ServerResult<Option<ReviewData>> {
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
             .await?
@@ -208,7 +205,7 @@ impl TaskService {
         }
     }
 
-    pub async fn get_next_queued(&self) -> Result<Option<Task>> {
+    async fn get_next_queued(&self) -> Result<Option<Task>> {
         let task = tasks::Entity::find()
             .filter(tasks::Column::Status.eq(TaskStatus::Queued.as_str()))
             .order_by_desc(tasks::Column::Priority)
@@ -232,7 +229,7 @@ impl TaskService {
         }))
     }
 
-    pub async fn requeue_task(&self, task_id: &Uuid) -> ServerResult<()> {
+    async fn requeue_task(&self, task_id: &Uuid) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -257,7 +254,7 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn requeue_tasks(&self, task_ids: &[Uuid]) -> ServerResult<usize> {
+    async fn requeue_tasks(&self, task_ids: &[Uuid]) -> ServerResult<usize> {
         let mut count = 0;
         for task_id in task_ids {
             match self.requeue_task(task_id).await {
@@ -268,7 +265,7 @@ impl TaskService {
         Ok(count)
     }
 
-    pub async fn find_orphaned_tasks(&self) -> ServerResult<Vec<Task>> {
+    async fn find_orphaned_tasks(&self) -> ServerResult<Vec<Task>> {
         let non_terminal_statuses = vec![
             TaskStatus::InProgress.as_str(),
             TaskStatus::Claimed.as_str(),
@@ -303,7 +300,7 @@ impl TaskService {
         Ok(result)
     }
 
-    pub async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>> {
+    async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>> {
         let now = Utc::now();
         let active_statuses = vec![
             TaskStatus::InProgress.as_str(),
@@ -340,7 +337,7 @@ impl TaskService {
         Ok(result)
     }
 
-    pub async fn fail_task(&self, task_id: &Uuid, _reason: &str) -> ServerResult<()> {
+    async fn fail_task(&self, task_id: &Uuid, _reason: &str) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)

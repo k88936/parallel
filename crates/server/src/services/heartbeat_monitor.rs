@@ -1,22 +1,29 @@
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::{error, info, warn};
 
 use crate::errors::ServerResult;
-use crate::services::{TaskService, WorkerService};
-use crate::state::AppState;
+use crate::services::{TaskServiceTrait, WorkerServiceTrait};
 use parallel_protocol::WorkerStatus;
 
 pub struct HeartbeatMonitor {
-    state: AppState,
+    task_service: Arc<dyn TaskServiceTrait>,
+    worker_service: Arc<dyn WorkerServiceTrait>,
     timeout_seconds: i64,
     check_interval_seconds: u64,
 }
 
 impl HeartbeatMonitor {
-    pub fn new(state: AppState, timeout_seconds: i64, check_interval_seconds: u64) -> Self {
+    pub fn new(
+        task_service: Arc<dyn TaskServiceTrait>,
+        worker_service: Arc<dyn WorkerServiceTrait>,
+        timeout_seconds: i64,
+        check_interval_seconds: u64,
+    ) -> Self {
         Self {
-            state,
+            task_service,
+            worker_service,
             timeout_seconds,
             check_interval_seconds,
         }
@@ -35,10 +42,8 @@ impl HeartbeatMonitor {
     }
 
     async fn check_workers(&self) -> ServerResult<()> {
-        let worker_service = WorkerService::new(self.state.db.clone());
-        let task_service = TaskService::new(self.state.db.clone());
-
-        let stale_workers = worker_service
+        let stale_workers = self
+            .worker_service
             .find_stale_workers(self.timeout_seconds)
             .await?;
 
@@ -52,7 +57,8 @@ impl HeartbeatMonitor {
                 worker_id, self.timeout_seconds
             );
 
-            if let Err(e) = worker_service
+            if let Err(e) = self
+                .worker_service
                 .update_status(&worker_id, WorkerStatus::Offline)
                 .await
             {
@@ -67,7 +73,7 @@ impl HeartbeatMonitor {
                     worker_id
                 );
 
-                match task_service.requeue_tasks(&running_tasks).await {
+                match self.task_service.requeue_tasks(&running_tasks).await {
                     Ok(count) => {
                         info!(
                             "Successfully re-queued {}/{} tasks from worker {}",
@@ -81,7 +87,7 @@ impl HeartbeatMonitor {
                     }
                 }
 
-                if let Err(e) = worker_service.clear_tasks(&worker_id).await {
+                if let Err(e) = self.worker_service.clear_tasks(&worker_id).await {
                     error!("Failed to clear tasks for worker {}: {}", worker_id, e);
                 }
             }
@@ -91,8 +97,18 @@ impl HeartbeatMonitor {
     }
 }
 
-pub fn spawn_heartbeat_monitor(state: AppState, timeout_seconds: i64, check_interval_seconds: u64) {
-    let monitor = HeartbeatMonitor::new(state, timeout_seconds, check_interval_seconds);
+pub fn spawn_heartbeat_monitor(
+    task_service: Arc<dyn TaskServiceTrait>,
+    worker_service: Arc<dyn WorkerServiceTrait>,
+    timeout_seconds: i64,
+    check_interval_seconds: u64,
+) {
+    let monitor = HeartbeatMonitor::new(
+        task_service,
+        worker_service,
+        timeout_seconds,
+        check_interval_seconds,
+    );
 
     tokio::spawn(async move {
         info!(

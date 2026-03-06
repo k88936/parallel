@@ -8,7 +8,6 @@ use uuid::Uuid;
 use parallel_protocol::*;
 
 use crate::errors::ServerError;
-use crate::services::{Coordinator, TaskService};
 use crate::state::AppState;
 
 pub async fn create_task(
@@ -22,9 +21,8 @@ pub async fn create_task(
     let priority = payload.priority.unwrap_or_default();
     let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
-    let task_service = TaskService::new(state.db.clone());
-
-    match task_service
+    match state
+        .task_service
         .create(
             payload.repo_url,
             payload.description,
@@ -52,11 +50,9 @@ pub async fn list_tasks(
     let offset = query.offset.map(|o| o as u64);
     let status = query.status;
 
-    let task_service = TaskService::new(state.db.clone());
-
-    match task_service.list(status, limit, offset).await {
+    match state.task_service.list(status, limit, offset).await {
         Ok(tasks) => {
-            let total = task_service.count(status).await.unwrap_or(0);
+            let total = state.task_service.count(status).await.unwrap_or(0);
             Ok(Json(TaskListResponse { tasks, total }))
         }
         Err(e) => {
@@ -70,9 +66,7 @@ pub async fn get_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<Json<Task>, StatusCode> {
-    let task_service = TaskService::new(state.db.clone());
-
-    match task_service.get(&task_id).await {
+    match state.task_service.get(&task_id).await {
         Ok(task) => Ok(Json(task)),
         Err(e) => {
             tracing::error!("Failed to get task: {}", e);
@@ -85,18 +79,17 @@ pub async fn cancel_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let task_service = TaskService::new(state.db.clone());
-    let coordinator = Coordinator::new(state.db.clone());
-
-    match task_service.get(&task_id).await {
+    match state.task_service.get(&task_id).await {
         Ok(task) => {
             if let Some(worker_id) = task.claimed_by {
-                let _ = coordinator
+                let _ = state
+                    .coordinator
                     .queue_cancellation(worker_id, task_id, "Cancelled by user".to_string())
                     .await;
             }
 
-            match task_service
+            match state
+                .task_service
                 .update_status(&task_id, TaskStatus::Cancelled)
                 .await
             {
@@ -121,19 +114,17 @@ pub async fn submit_feedback(
 ) -> Result<StatusCode, StatusCode> {
     tracing::info!("Feedback submitted for task {}", task_id);
 
-    let task_service = TaskService::new(state.db.clone());
-    let coordinator = Coordinator::new(state.db.clone());
-
     let feedback = HumanFeedback {
         provided_at: chrono::Utc::now(),
         feedback_type: payload.feedback_type,
         message: payload.message,
     };
 
-    match task_service.get(&task_id).await {
+    match state.task_service.get(&task_id).await {
         Ok(task) => match task.claimed_by {
             Some(worker_id) => {
-                match coordinator
+                match state
+                    .coordinator
                     .queue_feedback(worker_id, task_id, feedback.clone())
                     .await
                 {
@@ -142,7 +133,8 @@ pub async fn submit_feedback(
                             feedback.feedback_type,
                             parallel_protocol::FeedbackType::RequestChanges
                         ) {
-                            if let Err(e) = task_service
+                            if let Err(e) = state
+                                .task_service
                                 .update_status(&task_id, TaskStatus::PendingRework)
                                 .await
                             {
@@ -178,9 +170,7 @@ pub async fn get_review_data(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
 ) -> Result<Json<Option<ReviewData>>, StatusCode> {
-    let task_service = TaskService::new(state.db.clone());
-
-    match task_service.get_review_data(&task_id).await {
+    match state.task_service.get_review_data(&task_id).await {
         Ok(review_data) => Ok(Json(review_data)),
         Err(e) => {
             tracing::error!("Failed to get review data for task {}: {}", task_id, e);
@@ -194,9 +184,8 @@ pub async fn update_task_status(
     Path(task_id): Path<Uuid>,
     Json(payload): Json<UpdateTaskStatusRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let task_service = TaskService::new(state.db.clone());
-
-    match task_service
+    match state
+        .task_service
         .complete_iteration(&task_id, payload.status)
         .await
     {
