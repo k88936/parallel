@@ -4,31 +4,26 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
-use uuid::Uuid;
 
-use crate::worker::streaming::ProgressReporter;
-
+#[derive(Debug)]
 struct RunningTerminal {
     process: Mutex<tokio::process::Child>,
     output: Arc<RwLock<String>>,
 }
 
+#[derive(Debug)]
 pub struct TaskClient {
     workdir: PathBuf,
     terminals: RwLock<HashMap<acp::TerminalId, Arc<RunningTerminal>>>,
-    task_id: Uuid,
-    progress_reporter: Arc<dyn ProgressReporter>,
 }
 
 impl TaskClient {
     #[instrument(skip_all, fields(workdir = %workdir.display()))]
-    pub fn new(workdir: PathBuf, task_id: Uuid, progress_reporter: Arc<dyn ProgressReporter>) -> Self {
+    pub fn new(workdir: PathBuf) -> Self {
         debug!("Creating new TaskClient");
         Self {
             workdir,
             terminals: RwLock::new(HashMap::new()),
-            task_id,
-            progress_reporter,
         }
     }
 
@@ -100,10 +95,6 @@ impl acp::Client for TaskClient {
                     };
                     trace!(content_preview = %preview, "Agent message chunk");
                     print!("{}", text.text);
-                    
-                    self.progress_reporter
-                        .report_agent_output(self.task_id, text.text.clone())
-                        .await;
                 }
             }
             acp::SessionUpdate::ToolCall(update) => {
@@ -313,9 +304,6 @@ impl acp::Client for TaskClient {
         let output: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
         let output_for_task = output.clone();
         let terminal_id_for_task = terminal_id.to_string();
-        let terminal_id_uuid = Uuid::parse_str(&terminal_id.to_string()).unwrap_or_else(|_| Uuid::nil());
-        let task_id_for_streaming = self.task_id;
-        let reporter_for_streaming = self.progress_reporter.clone();
 
         tokio::spawn(async move {
             use tokio::io::AsyncReadExt;
@@ -337,10 +325,6 @@ impl acp::Client for TaskClient {
                         trace!(terminal_id = %terminal_id_for_task, bytes = n, "stdout received");
                         let mut out = output_for_task.write().await;
                         out.push_str(&s);
-                        
-                        reporter_for_streaming
-                            .report_terminal_output(task_id_for_streaming, terminal_id_uuid, s.to_string())
-                            .await;
                     }
                     Ok(n) = stderr.read(&mut stderr_buf) => {
                         if n == 0 {
@@ -351,10 +335,6 @@ impl acp::Client for TaskClient {
                         trace!(terminal_id = %terminal_id_for_task, bytes = n, "stderr received");
                         let mut out = output_for_task.write().await;
                         out.push_str(&s);
-                        
-                        reporter_for_streaming
-                            .report_terminal_output(task_id_for_streaming, terminal_id_uuid, s.to_string())
-                            .await;
                     }
                     else => break,
                 }

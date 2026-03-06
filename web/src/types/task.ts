@@ -84,25 +84,3 @@ export interface SubmitFeedbackRequest {
   feedback_type: FeedbackType;
   message: string;
 }
-
-export type ExecutionStage = 'cloning' | 'working' | 'committing' | 'pushing';
-
-export interface TaskProgressUpdate {
-  stage: ExecutionStage;
-  message: string;
-  percentage?: number;
-}
-
-export type HumanNotification =
-  | { type: 'task_progress'; task_id: string; update: TaskProgressUpdate }
-  | { type: 'agent_output'; task_id: string; output: string }
-  | { type: 'terminal_output'; task_id: string; terminal_id: string; output: string }
-  | { type: 'task_awaiting_review'; task_id: string; result: IterationResult }
-  | { type: 'task_completed'; task_id: string; branch: string }
-  | { type: 'task_status_update'; task_id: string; status: TaskStatus };
-
-export type HumanMessage =
-  | { type: 'send_message'; task_id: string; message: string }
-  | { type: 'terminal_input'; task_id: string; terminal_id: string; input: string }
-  | { type: 'abort_task'; task_id: string }
-  | { type: 'accept_work'; task_id: string };

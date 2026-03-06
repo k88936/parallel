@@ -3,7 +3,6 @@ use crate::worker::task_client::TaskClient;
 use crate::worker::git::GitOps;
 use crate::worker::server_client::ServerClient;
 use crate::worker::task::Task;
-use crate::worker::streaming::{WebSocketClient, ProgressReporter, NoOpReporter};
 use agent_client_protocol::{Agent as _, ClientCapabilities as AcpClientCapabilities, FileSystemCapability, ContentBlock};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -22,8 +21,6 @@ pub struct Worker {
     server_client: Arc<ServerClient>,
     worker_id: Uuid,
     ssh_key_path: PathBuf,
-    ws_client: Option<Arc<WebSocketClient>>,
-    ws_url: String,
 }
 
 impl Worker {
@@ -33,7 +30,6 @@ impl Worker {
         max_concurrent: usize,
         server_url: String,
         ssh_key_path: PathBuf,
-        ws_url: String,
     ) -> Self {
         Self {
             work_base,
@@ -43,8 +39,6 @@ impl Worker {
             server_client: Arc::new(ServerClient::new(server_url)),
             worker_id: Uuid::nil(),
             ssh_key_path,
-            ws_client: None,
-            ws_url,
         }
     }
 
@@ -63,19 +57,15 @@ impl Worker {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&self) -> Result<()> {
         if self.worker_id == Uuid::nil() {
             anyhow::bail!("Worker not registered. Call register() first.");
         }
 
-        let ws_client = WebSocketClient::new(self.worker_id, self.ws_url.clone()).await?;
-        let ws_client = Arc::new(ws_client);
-        self.ws_client = Some(ws_client.clone());
-
         let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10));
         let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
 
-        info!("Worker {} starting main loop with WebSocket", self.worker_id);
+        info!("Worker {} starting main loop", self.worker_id);
 
         let mut current_task: Option<Uuid> = None;
 
@@ -87,12 +77,6 @@ impl Worker {
                         .await
                     {
                         warn!("Heartbeat failed: {}", e);
-                    }
-                    
-                    if let Some(ws) = &self.ws_client {
-                        if let Err(e) = ws.send_heartbeat().await {
-                            warn!("WebSocket heartbeat failed: {}", e);
-                        }
                     }
                 }
 
@@ -127,11 +111,7 @@ impl Worker {
             let _permit = self.semaphore.acquire().await.unwrap();
             info!("Starting task {} in concurrent slot", task_id);
 
-            let reporter: Arc<dyn ProgressReporter> = self.ws_client.clone()
-                .map(|ws| ws as Arc<dyn ProgressReporter>)
-                .unwrap_or_else(|| Arc::new(NoOpReporter));
-
-            let result = self.execute_task_inner(&worker_task, task_id, reporter).await;
+            let result = self.execute_task_inner(&worker_task).await;
 
             let (status, iteration_result) = match &result {
                 Ok(()) => {
@@ -163,14 +143,10 @@ impl Worker {
             };
 
             if let Err(e) = self.server_client
-                .report_task_status(task_id, status.clone(), iteration_result)
+                .report_task_status(task_id, status, iteration_result)
                 .await
             {
                 error!("Failed to report task status: {}", e);
-            }
-
-            if let Some(ws) = &self.ws_client {
-                ws.report_task_status(task_id, status).await;
             }
 
             return Ok(Some(task_id));
@@ -189,7 +165,7 @@ impl Worker {
         }
     }
 
-    async fn execute_task_inner(&self, task: &Task, task_id: Uuid, reporter: Arc<dyn ProgressReporter>) -> Result<()> {
+    async fn execute_task_inner(&self, task: &Task) -> Result<()> {
         let task_dir = self.work_base.join(&task.id);
         tokio::fs::create_dir_all(&task_dir)
             .await
@@ -199,7 +175,7 @@ impl Worker {
         let git = GitOps::clone(&task.repo_url, &repo_dir, &task.ssh_key_path)?;
         git.create_branch(&task.branch_name)?;
 
-        self.run_agent(&repo_dir, &task.description, task_id, reporter).await?;
+        self.run_agent(&repo_dir, &task.description).await?;
 
         git.add_all()?;
         git.commit(&format!("Implement: {}", task.description))?;
@@ -212,7 +188,7 @@ impl Worker {
         Ok(())
     }
 
-    async fn run_agent(&self, workdir: &PathBuf, prompt: &str, task_id: Uuid, reporter: Arc<dyn ProgressReporter>) -> Result<()> {
+    async fn run_agent(&self, workdir: &PathBuf, prompt: &str) -> Result<()> {
         let workdir = std::fs::canonicalize(workdir)
             .context("Failed to resolve absolute path for workdir")?;
         
@@ -233,7 +209,7 @@ impl Worker {
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
 
-        let client = TaskClient::new(workdir.clone(), task_id, reporter);
+        let client = TaskClient::new(workdir.clone());
 
         let local_set = tokio::task::LocalSet::new();
         local_set

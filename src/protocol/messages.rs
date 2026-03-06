@@ -57,10 +57,6 @@ pub enum ServerMessage {
         task_id: Uuid,
         session_id: Uuid,
     },
-    HumanDetached {
-        task_id: Uuid,
-        session_id: Uuid,
-    },
     HumanMessage {
         task_id: Uuid,
         session_id: Uuid,
@@ -74,9 +70,6 @@ pub enum ServerMessage {
     AbortTask {
         task_id: Uuid,
         reason: String,
-    },
-    AcceptWork {
-        task_id: Uuid,
     },
 }
 
