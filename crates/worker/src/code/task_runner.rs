@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use agent_client_protocol as acp;
 use agent_client_protocol::{
-    Agent as _, ClientCapabilities as AcpClientCapabilities, ContentBlock, FileSystemCapability,
+    Agent, ClientCapabilities as AcpClientCapabilities, ContentBlock, FileSystemCapabilities
 };
 
 use parallel_protocol::{HumanFeedback, WorkerEvent};
@@ -90,7 +90,7 @@ impl TaskRunner {
                     )
                     .client_capabilities(
                         AcpClientCapabilities::default()
-                            .fs(FileSystemCapability::default()
+                            .fs(FileSystemCapabilities::default()
                                 .read_text_file(true)
                                 .write_text_file(true))
                             .terminal(true)

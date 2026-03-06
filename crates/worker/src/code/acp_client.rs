@@ -327,17 +327,17 @@ impl acp::Client for ACPClient {
         Ok(acp::WaitForTerminalExitResponse::new(exit_status))
     }
 
-    async fn kill_terminal_command(
+    async fn kill_terminal(
         &self,
-        args: acp::KillTerminalCommandRequest,
-    ) -> acp::Result<acp::KillTerminalCommandResponse> {
+        args: acp::KillTerminalRequest,
+    ) -> acp::Result<acp::KillTerminalResponse> {
         let terminals = self.terminals.read().await;
         if let Some(terminal) = terminals.get(&args.terminal_id) {
             let mut process = terminal.process.lock().await;
             let _ = process.kill().await;
         }
 
-        Ok(acp::KillTerminalCommandResponse::new())
+        Ok(acp::KillTerminalResponse::new())
     }
 
     async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {

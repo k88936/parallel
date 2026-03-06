@@ -4,7 +4,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use parallel_protocol::{
-    CreateTaskRequest, CreateTaskResponse, PollRequest, PollResponse, PushEventsRequest,
+    PollRequest, PollResponse, PushEventsRequest,
     PushEventsResponse, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction,
 };
 
