@@ -29,19 +29,13 @@ const STATUS_LABELS: Record<string, string> = {
     failed: 'Failed',
 };
 
-export function TaskList({
-                             refreshKey,
-                         }: {
-    refreshKey: number;
-}) {
+export function TaskList() {
     const router = useRouter();
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('');
 
-    const fetchTasks = async () => {
-        setLoading(true);
+    async function fetchTasks() {
         setError(null);
         try {
             const response = await api.listTasks(
@@ -50,14 +44,14 @@ export function TaskList({
             setTasks(response.tasks);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
-        } finally {
-            setLoading(false);
         }
-    };
+    }
 
     useEffect(() => {
-        fetchTasks();
-    }, [refreshKey, statusFilter]);
+        (() => fetchTasks())();
+        const interval = setInterval(fetchTasks, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     const handleCancel = async (taskId: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -71,7 +65,6 @@ export function TaskList({
         }
     };
 
-    if (loading) return <div className="text-center py-8">Loading tasks...</div>;
     if (error)
         return <div className="text-center py-8 text-red-600">Error: {error}</div>;
 

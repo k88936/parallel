@@ -4,11 +4,7 @@ import {useState} from 'react';
 import type {CreateTaskRequest, TaskPriority} from '@/types/task';
 import {api} from '@/lib/api';
 
-export function CreateTaskForm({
-                                   onSuccess,
-                               }: {
-    onSuccess: () => void;
-}) {
+export function CreateTaskForm() {
     const [formData, setFormData] = useState<CreateTaskRequest>({
         // repo_url:  "git@github.com:k88936/test.git",
         // description:  "say hello world",
@@ -33,7 +29,6 @@ export function CreateTaskForm({
                 base_branch: 'main',
                 priority: 'normal',
             });
-            onSuccess();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to create task');
         } finally {

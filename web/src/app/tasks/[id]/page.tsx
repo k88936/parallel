@@ -60,11 +60,6 @@ export default function TaskDetailPage() {
     }, []);
 
     const handleSubmitFeedback = async (feedbackType: 'approve' | 'request_changes' | 'abort') => {
-        if (feedbackType !== 'approve' && !feedbackMessage.trim()) {
-            alert('Please provide feedback message');
-            return;
-        }
-
         setSubmitting(true);
         try {
             await api.submitFeedback(taskId, {
@@ -72,7 +67,7 @@ export default function TaskDetailPage() {
                 message: feedbackMessage || (feedbackType === 'approve' ? 'Approved' : ''),
             });
             setFeedbackMessage('');
-            fetchData();
+            await fetchData();
         } catch (err) {
             alert(err instanceof Error ? err.message : 'Failed to submit feedback');
         } finally {
