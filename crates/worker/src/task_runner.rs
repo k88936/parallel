@@ -138,9 +138,7 @@ impl TaskRunner {
                             match response.stop_reason {
                                 acp::StopReason::EndTurn => {
                                     let messages = client.get_messages().await;
-                                    let git = GitOps {
-                                        repo_path: self.workdir.clone(),
-                                    };
+                                    let git = GitOps::open(&self.workdir)?;
                                     let diff = git.diff().unwrap_or_default();
 
                                     tracing::info!("Task {} awaiting review", self.task_id);

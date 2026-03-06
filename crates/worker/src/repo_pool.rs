@@ -80,9 +80,7 @@ impl RepoPool {
                 slot_id, repo_hash, task_id
             );
 
-            let git = GitOps {
-                repo_path: slot_path.clone(),
-            };
+            let git = GitOps::open(&slot_path)?;
             git.fetch(ssh_key)?;
             git.force_checkout(base_branch)?;
             git.delete_branch_if_exists(target_branch)?;
@@ -99,9 +97,7 @@ impl RepoPool {
 
             GitOps::clone(repo_url, base_branch, &slot_path, ssh_key)?;
 
-            let git = GitOps {
-                repo_path: slot_path.clone(),
-            };
+            let git = GitOps::open(&slot_path)?;
             git.create_branch(target_branch)?;
         }
 
@@ -123,9 +119,7 @@ impl RepoPool {
         target_branch: &str,
         ssh_key: &str,
     ) -> Result<()> {
-        let git = GitOps {
-            repo_path: slot_path.to_path_buf(),
-        };
+        let git = GitOps::open(slot_path)?;
 
         git.fetch(ssh_key)?;
 

@@ -297,9 +297,7 @@ impl Worker {
             .await?;
 
         if !cancel_token.is_cancelled() {
-            let git = GitOps {
-                repo_path: repo_dir.clone(),
-            };
+            let git = GitOps::open(&repo_dir)?;
             git.add_all()?;
             git.commit(&format!("Implement: {}", task.description))?;
             git.push(&task.target_branch, &task.ssh_key)?;
