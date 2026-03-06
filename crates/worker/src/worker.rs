@@ -288,7 +288,7 @@ impl Worker {
                 &task.ssh_key,
             )
             .await
-            .context("Failed to create task directory")?;
+            .context("Failed to get task directory")?;
 
         if cancel_token.is_cancelled() {
             let _ = repo_pool.release_slot(&task.repo_url, task.id).await;

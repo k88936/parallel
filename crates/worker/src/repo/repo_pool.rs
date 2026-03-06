@@ -2,6 +2,7 @@ use crate::repo::repo_ops::GitOps;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
@@ -119,9 +120,23 @@ impl RepoPool {
 
         git.fetch(ssh_key)?;
 
-        git.force_checkout(base_branch)?;
-        git.delete_branch_if_exists(target_branch)?;
-        git.create_branch(target_branch)?;
+        Command::new("git")
+            .current_dir(slot_path)
+            .args(&["clean", "-fd"])
+            .output()
+            .expect("Failed cleaning up repo");
+        Command::new("git")
+            .current_dir(slot_path)
+            .args(&[
+                "checkout",
+                "-B",
+                target_branch,
+
+                format!("origin/{}", base_branch).as_str(),
+                "--force",
+            ])
+            .output()
+            .expect("Failed checkout to base");
 
         Ok(())
     }

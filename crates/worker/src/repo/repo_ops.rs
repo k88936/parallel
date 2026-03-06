@@ -4,6 +4,7 @@ use git2::{
     build::RepoBuilder,
 };
 use std::path::Path;
+use std::process::Command;
 
 pub struct GitOps {
     repo: Repository,
@@ -196,44 +197,6 @@ impl GitOps {
         remote
             .fetch(&[] as &[&str], Some(&mut fo), None)
             .context("Failed to fetch")?;
-
-        Ok(())
-    }
-
-    pub fn force_checkout(&self, branch: &str) -> Result<()> {
-        let branch_ref = format!("refs/remotes/origin/{}", branch);
-
-        let commit = match self.repo.find_reference(&branch_ref) {
-            Ok(r) => {
-                let target = r.target().context("Remote branch has no target")?;
-                self.repo
-                    .find_commit(target)
-                    .context("Failed to find commit")?
-            }
-            Err(_) => {
-                let local_ref = format!("refs/heads/{}", branch);
-                let r = self
-                    .repo
-                    .find_reference(&local_ref)
-                    .context("Failed to find branch")?;
-                let target = r.target().context("Branch has no target")?;
-                self.repo
-                    .find_commit(target)
-                    .context("Failed to find commit")?
-            }
-        };
-
-        self.repo.reset(commit.as_object(), ResetType::Hard, None)?;
-
-        let mut opts = git2::StatusOptions::new();
-        opts.include_untracked(true);
-        for entry in self.repo.statuses(Some(&mut opts))?.iter() {
-            if entry.status().contains(git2::Status::WT_NEW) {
-                if let Some(path) = entry.path() {
-                    std::fs::remove_file(path)?;
-                }
-            }
-        }
 
         Ok(())
     }
