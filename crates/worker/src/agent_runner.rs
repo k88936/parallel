@@ -23,7 +23,6 @@ pub struct AgentRunner {
     task_id: uuid::Uuid,
     task_description: String,
     workdir: PathBuf,
-    ssh_key_path: PathBuf,
     branch_name: String,
 }
 
@@ -32,14 +31,12 @@ impl AgentRunner {
         task_id: uuid::Uuid,
         task_description: String,
         workdir: PathBuf,
-        ssh_key_path: PathBuf,
         branch_name: String,
     ) -> Self {
         Self {
             task_id,
             task_description,
             workdir,
-            ssh_key_path,
             branch_name,
         }
     }

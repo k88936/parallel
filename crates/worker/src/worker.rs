@@ -271,7 +271,6 @@ impl Worker {
             task.id,
             task.description.clone(),
             workdir,
-            ssh_key_path.clone(),
             task.target_branch.clone(),
         );
 
