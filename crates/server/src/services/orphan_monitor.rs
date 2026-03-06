@@ -42,7 +42,7 @@ impl OrphanMonitor {
         }
     }
 
-    async fn check_orphans(&self) -> ServerResult<()> {
+    pub async fn check_orphans(&self) -> ServerResult<()> {
         let orphaned_tasks = self.task_service.find_orphaned_tasks().await?;
 
         if orphaned_tasks.is_empty() {
@@ -80,7 +80,7 @@ impl OrphanMonitor {
         Ok(())
     }
 
-    async fn check_timeouts(&self) -> ServerResult<()> {
+    pub async fn check_timeouts(&self) -> ServerResult<()> {
         let timed_out_tasks = self.task_service.find_timed_out_tasks().await?;
 
         if timed_out_tasks.is_empty() {
@@ -123,3 +123,4 @@ pub fn spawn_orphan_monitor(
         monitor.run().await;
     });
 }
+

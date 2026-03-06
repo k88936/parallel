@@ -20,3 +20,6 @@ tower.workspace = true
 tower-http.workspace = true
 sea-orm.workspace = true
 sea-orm-migration.workspace = true
+
+[dev-dependencies]
+mockall = "0.13"
