@@ -76,24 +76,50 @@ impl APIClient {
     }
 
     pub async fn push_events(&self, worker_id: Uuid, events: Vec<WorkerEvent>) -> Result<bool> {
+        self.push_events_with_retry(worker_id, events, 3).await
+    }
+
+    async fn push_events_with_retry(
+        &self,
+        worker_id: Uuid,
+        events: Vec<WorkerEvent>,
+        max_retries: u32,
+    ) -> Result<bool> {
         let url = format!("{}/api/workers/events", self.base_url);
-        let request = PushEventsRequest { worker_id, events };
+        let mut delay = Duration::from_millis(100);
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to push events")?;
+        for attempt in 0..=max_retries {
+            let request = PushEventsRequest {
+                worker_id,
+                events: events.clone(),
+            };
 
-        if !response.status().is_success() {
-            return Ok(false);
+            match self
+                .client
+                .post(&url)
+                .json(&request)
+                .send()
+                .await
+            {
+                Ok(response) if response.status().is_success() => {
+                    return response
+                        .json::<PushEventsResponse>()
+                        .await
+                        .context("Failed to parse push events response")
+                        .map(|r| r.acknowledged);
+                }
+                Ok(_) | Err(_) => {
+                    if attempt < max_retries {
+                        tokio::time::sleep(delay).await;
+                        delay *= 2;
+                    } else {
+                        return Ok(false);
+                    }
+                }
+            }
         }
 
-        response.json::<PushEventsResponse>().await
-            .context("Failed to parse push events response")
-            .map(|r| r.acknowledged)
+        Ok(false)
     }
 
     pub async fn create_task(&self, request: CreateTaskRequest) -> Result<Uuid> {

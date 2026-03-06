@@ -49,17 +49,30 @@ impl Worker {
 
     pub async fn register(&mut self, name: &str) -> Result<()> {
         let capabilities = WorkerCapabilities::default();
+        let mut delay = Duration::from_secs(1);
+        let max_delay = Duration::from_secs(60);
 
-        let worker_info = self
-            .api_client
-            .register(name.to_string(), capabilities, self.max_concurrent)
-            .await
-            .context("Failed to register with server")?;
-
-        self.worker_id = worker_info.id;
-        info!("Worker registered with ID: {}", self.worker_id);
-
-        Ok(())
+        loop {
+            match self
+                .api_client
+                .register(name.to_string(), capabilities.clone(), self.max_concurrent)
+                .await
+            {
+                Ok(worker_info) => {
+                    self.worker_id = worker_info.id;
+                    info!("Worker registered with ID: {}", self.worker_id);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to register with server: {}. Retrying in {:?}...",
+                        e, delay
+                    );
+                    tokio::time::sleep(delay).await;
+                    delay = std::cmp::min(delay * 2, max_delay);
+                }
+            }
+        }
     }
 
     pub async fn run(&mut self) -> Result<()> {
