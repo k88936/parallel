@@ -6,11 +6,11 @@ import {api} from '@/lib/api';
 
 export function CreateTaskForm() {
     const [formData, setFormData] = useState<CreateTaskRequest>({
-        // repo_url:  "git@github.com:k88936/test.git",
+        // repo_url: "git@github.com:k88936/test.git",
         // description:  "say hello world",
         repo_url: "git@github.com:k88936/parallel.git",
         description: "",
-        base_branch: 'dev',
+        base_branch: 'main',
         priority: 'normal',
     });
     const [loading, setLoading] = useState(false);
