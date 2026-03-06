@@ -4,9 +4,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use parallel_protocol::{
-    CreateTaskRequest, CreateTaskResponse, WorkerCapabilities, WorkerInfo,
-    PollRequest, PollResponse, PushEventsRequest, PushEventsResponse,
-    WorkerInstruction, WorkerEvent,
+    CreateTaskRequest, CreateTaskResponse, PollRequest, PollResponse, PushEventsRequest,
+    PushEventsResponse, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction,
 };
 
 pub struct APIClient {
@@ -50,7 +49,9 @@ impl APIClient {
             anyhow::bail!("Failed to register worker: status {}", response.status());
         }
 
-        response.json::<WorkerInfo>().await
+        response
+            .json::<WorkerInfo>()
+            .await
             .context("Failed to parse registration response")
     }
 
@@ -70,7 +71,9 @@ impl APIClient {
             anyhow::bail!("Failed to poll instructions: status {}", response.status());
         }
 
-        response.json::<PollResponse>().await
+        response
+            .json::<PollResponse>()
+            .await
             .context("Failed to parse poll response")
             .map(|r| r.instructions)
     }
@@ -94,13 +97,7 @@ impl APIClient {
                 events: events.clone(),
             };
 
-            match self
-                .client
-                .post(&url)
-                .json(&request)
-                .send()
-                .await
-            {
+            match self.client.post(&url).json(&request).send().await {
                 Ok(response) if response.status().is_success() => {
                     return response
                         .json::<PushEventsResponse>()
@@ -137,7 +134,9 @@ impl APIClient {
             anyhow::bail!("Failed to create task: status {}", response.status());
         }
 
-        response.json::<CreateTaskResponse>().await
+        response
+            .json::<CreateTaskResponse>()
+            .await
             .context("Failed to parse create task response")
             .map(|r| r.task_id)
     }

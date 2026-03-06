@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode};
 
 use parallel_protocol::*;
 
@@ -35,7 +31,10 @@ pub async fn poll_instructions(
     let worker_service = WorkerService::new(state.db.clone());
     let task_service = TaskService::new(state.db.clone());
 
-    let mut instructions = match coordinator.get_pending_instructions(&payload.worker_id).await {
+    let mut instructions = match coordinator
+        .get_pending_instructions(&payload.worker_id)
+        .await
+    {
         Ok(instructions) => instructions,
         Err(e) => {
             tracing::error!("Failed to poll instructions: {}", e);

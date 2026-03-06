@@ -6,8 +6,8 @@ pub mod state;
 
 use anyhow::Result;
 use axum::{
-    routing::{get, post, delete},
     Router,
+    routing::{delete, get, post},
 };
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
@@ -32,7 +32,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(30);
-    
+
     let heartbeat_interval: u64 = std::env::var("HEARTBEAT_CHECK_INTERVAL_SECONDS")
         .ok()
         .and_then(|s| s.parse().ok())

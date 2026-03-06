@@ -37,9 +37,7 @@ impl WorkerService {
             max_concurrent: Set(max_concurrent as i32),
         };
 
-        workers::Entity::insert(worker)
-            .exec(&self.db)
-            .await?;
+        workers::Entity::insert(worker).exec(&self.db).await?;
 
         Ok(WorkerInfo {
             id: worker_id,
@@ -70,9 +68,7 @@ impl WorkerService {
     }
 
     pub async fn list(&self) -> ServerResult<Vec<WorkerInfo>> {
-        let workers = workers::Entity::find()
-            .all(&self.db)
-            .await?;
+        let workers = workers::Entity::find().all(&self.db).await?;
 
         let worker_infos: Vec<WorkerInfo> = workers
             .into_iter()
@@ -92,7 +88,11 @@ impl WorkerService {
         Ok(worker_infos)
     }
 
-    pub async fn update_heartbeat(&self, worker_id: &Uuid, running_tasks: Vec<Uuid>) -> ServerResult<()> {
+    pub async fn update_heartbeat(
+        &self,
+        worker_id: &Uuid,
+        running_tasks: Vec<Uuid>,
+    ) -> ServerResult<()> {
         let now = Utc::now();
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
@@ -161,9 +161,12 @@ impl WorkerService {
         Ok(())
     }
 
-    pub async fn find_stale_workers(&self, timeout_seconds: i64) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
+    pub async fn find_stale_workers(
+        &self,
+        timeout_seconds: i64,
+    ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
         let cutoff = Utc::now() - chrono::Duration::seconds(timeout_seconds);
-        
+
         let stale_workers = workers::Entity::find()
             .filter(workers::Column::LastHeartbeat.lt(cutoff))
             .filter(workers::Column::Status.ne(WorkerStatus::Offline.as_str()))
@@ -174,7 +177,8 @@ impl WorkerService {
         let result: Vec<(Uuid, Vec<Uuid>)> = stale_workers
             .into_iter()
             .map(|w| {
-                let tasks: Vec<Uuid> = serde_json::from_str(&w.current_tasks_json).unwrap_or_default();
+                let tasks: Vec<Uuid> =
+                    serde_json::from_str(&w.current_tasks_json).unwrap_or_default();
                 (w.id, tasks)
             })
             .collect();

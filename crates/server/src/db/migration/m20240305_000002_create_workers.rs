@@ -13,17 +13,20 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Workers::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Workers::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new(Workers::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Workers::Name).string().not_null())
                     .col(ColumnDef::new(Workers::Status).string().not_null())
-                    .col(ColumnDef::new(Workers::LastHeartbeat).timestamp_with_time_zone().not_null())
+                    .col(
+                        ColumnDef::new(Workers::LastHeartbeat)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Workers::CurrentTask).uuid())
-                    .col(ColumnDef::new(Workers::CapabilitiesJson).string().not_null())
+                    .col(
+                        ColumnDef::new(Workers::CapabilitiesJson)
+                            .string()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Workers::MaxConcurrent).integer().not_null())
                     .foreign_key(
                         ForeignKey::create()

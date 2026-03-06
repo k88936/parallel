@@ -77,9 +77,9 @@ impl acp::Client for ACPClient {
         let option = args.options.first();
         let outcome = if let Some(opt) = option {
             tracing::info!("Auto-approving permission: {}", opt.name);
-            acp::RequestPermissionOutcome::Selected(
-                acp::SelectedPermissionOutcome::new(opt.option_id.clone())
-            )
+            acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                opt.option_id.clone(),
+            ))
         } else {
             acp::RequestPermissionOutcome::Cancelled
         };
@@ -96,10 +96,16 @@ impl acp::Client for ACPClient {
                 match content {
                     acp::ContentBlock::Text(text) => {
                         print!("{}", text.text);
-                        self.add_message("assistant", MessageType::Text, text.text.clone()).await;
+                        self.add_message("assistant", MessageType::Text, text.text.clone())
+                            .await;
                     }
                     acp::ContentBlock::Image(img) => {
-                        self.add_message("assistant", MessageType::Image, format!("[Image: {}]", img.mime_type)).await;
+                        self.add_message(
+                            "assistant",
+                            MessageType::Image,
+                            format!("[Image: {}]", img.mime_type),
+                        )
+                        .await;
                     }
                     acp::ContentBlock::Resource(res) => {
                         let uri = match &res.resource {
@@ -111,31 +117,49 @@ impl acp::Client for ACPClient {
                             }
                             _ => "unknown".to_string(),
                         };
-                        self.add_message("assistant", MessageType::Resource, format!("[Resource: {}]", uri)).await;
+                        self.add_message(
+                            "assistant",
+                            MessageType::Resource,
+                            format!("[Resource: {}]", uri),
+                        )
+                        .await;
                     }
                     _ => {}
                 }
             }
             acp::SessionUpdate::ToolCall(update) => {
                 tracing::info!("Tool call: {}", update.title);
-                self.add_message("assistant", MessageType::ToolCall, format!("[Tool Call: {}]", update.title)).await;
+                self.add_message(
+                    "assistant",
+                    MessageType::ToolCall,
+                    format!("[Tool Call: {}]", update.title),
+                )
+                .await;
             }
             acp::SessionUpdate::Plan(plan) => {
-                let plan_content = plan.entries
+                let plan_content = plan
+                    .entries
                     .iter()
                     .map(|e| format!("- {}", e.content))
                     .collect::<Vec<_>>()
                     .join("\n");
-                self.add_message("assistant", MessageType::Plan, format!("[Plan]\n{}", plan_content)).await;
+                self.add_message(
+                    "assistant",
+                    MessageType::Plan,
+                    format!("[Plan]\n{}", plan_content),
+                )
+                .await;
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
-                    self.add_message("assistant", MessageType::Thought, text.text.clone()).await;
+                    self.add_message("assistant", MessageType::Thought, text.text.clone())
+                        .await;
                 }
             }
             acp::SessionUpdate::UserMessageChunk(chunk) => {
                 if let acp::ContentBlock::Text(text) = &chunk.content {
-                    self.add_message("user", MessageType::UserMessage, text.text.clone()).await;
+                    self.add_message("user", MessageType::UserMessage, text.text.clone())
+                        .await;
                 }
             }
             _ => {}
@@ -155,7 +179,9 @@ impl acp::Client for ACPClient {
 
         match tokio::fs::write(&path, &args.content).await {
             Ok(()) => Ok(acp::WriteTextFileResponse::new()),
-            Err(e) => Err(acp::Error::invalid_params().data(format!("Failed to write file: {}", e)))
+            Err(e) => {
+                Err(acp::Error::invalid_params().data(format!("Failed to write file: {}", e)))
+            }
         }
     }
 
@@ -167,7 +193,7 @@ impl acp::Client for ACPClient {
 
         match tokio::fs::read_to_string(&path).await {
             Ok(content) => Ok(acp::ReadTextFileResponse::new(content)),
-            Err(e) => Err(acp::Error::invalid_params().data(format!("Failed to read file: {}", e)))
+            Err(e) => Err(acp::Error::invalid_params().data(format!("Failed to read file: {}", e))),
         }
     }
 
@@ -198,8 +224,9 @@ impl acp::Client for ACPClient {
             cmd.envs(envs);
         }
 
-        let mut child = cmd.spawn()
-            .map_err(|e| acp::Error::invalid_params().data(format!("Failed to spawn command: {}", e)))?;
+        let mut child = cmd.spawn().map_err(|e| {
+            acp::Error::invalid_params().data(format!("Failed to spawn command: {}", e))
+        })?;
 
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();

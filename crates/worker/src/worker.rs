@@ -30,11 +30,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(
-        work_base: PathBuf,
-        max_concurrent: usize,
-        server_url: String,
-    ) -> Self {
+    pub fn new(work_base: PathBuf, max_concurrent: usize, server_url: String) -> Self {
         let repo_pool_base = work_base.join("repos");
         let repo_pool = Arc::new(RepoPool::new(repo_pool_base));
 
@@ -283,7 +279,6 @@ impl Worker {
         event_tx: mpsc::Sender<WorkerEvent>,
         repo_pool: Arc<RepoPool>,
     ) -> Result<()> {
-
         let repo_dir = repo_pool
             .acquire_slot(
                 &task.repo_url,

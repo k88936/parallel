@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use uuid::Uuid;
 
@@ -16,9 +16,9 @@ pub async fn create_task(
     Json(payload): Json<CreateTaskRequest>,
 ) -> Result<Json<CreateTaskResponse>, StatusCode> {
     let base_branch = payload.base_branch.unwrap_or_else(|| "main".to_string());
-    let target_branch = payload.target_branch.unwrap_or_else(|| {
-        format!("task/{}", Uuid::new_v4())
-    });
+    let target_branch = payload
+        .target_branch
+        .unwrap_or_else(|| format!("task/{}", Uuid::new_v4()));
     let priority = payload.priority.unwrap_or_default();
     let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
@@ -96,7 +96,10 @@ pub async fn cancel_task(
                     .await;
             }
 
-            match task_service.update_status(&task_id, TaskStatus::Cancelled).await {
+            match task_service
+                .update_status(&task_id, TaskStatus::Cancelled)
+                .await
+            {
                 Ok(()) => Ok(StatusCode::NO_CONTENT),
                 Err(e) => {
                     tracing::error!("Failed to cancel task: {}", e);
@@ -128,30 +131,41 @@ pub async fn submit_feedback(
     };
 
     match task_service.get(&task_id).await {
-        Ok(task) => {
-            match task.claimed_by {
-                Some(worker_id) => {
-                    match coordinator.queue_feedback(worker_id, task_id, feedback.clone()).await {
-                        Ok(()) => {
-                            if matches!(feedback.feedback_type, parallel_protocol::FeedbackType::RequestChanges) {
-                                if let Err(e) = task_service.update_status(&task_id, TaskStatus::PendingRework).await {
-                                    tracing::error!("Failed to update task {} status to PendingRework: {}", task_id, e);
-                                }
+        Ok(task) => match task.claimed_by {
+            Some(worker_id) => {
+                match coordinator
+                    .queue_feedback(worker_id, task_id, feedback.clone())
+                    .await
+                {
+                    Ok(()) => {
+                        if matches!(
+                            feedback.feedback_type,
+                            parallel_protocol::FeedbackType::RequestChanges
+                        ) {
+                            if let Err(e) = task_service
+                                .update_status(&task_id, TaskStatus::PendingRework)
+                                .await
+                            {
+                                tracing::error!(
+                                    "Failed to update task {} status to PendingRework: {}",
+                                    task_id,
+                                    e
+                                );
                             }
-                            Ok(StatusCode::NO_CONTENT)
                         }
-                        Err(e) => {
-                            tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
-                            Err(StatusCode::INTERNAL_SERVER_ERROR)
-                        }
+                        Ok(StatusCode::NO_CONTENT)
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 }
-                None => {
-                    tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
-                    Err(StatusCode::BAD_REQUEST)
-                }
             }
-        }
+            None => {
+                tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
+                Err(StatusCode::BAD_REQUEST)
+            }
+        },
         Err(ServerError::TaskNotFound(_)) => Err(StatusCode::NOT_FOUND),
         Err(e) => {
             tracing::error!("Failed to get task for feedback: {}", e);
@@ -182,13 +196,12 @@ pub async fn update_task_status(
 ) -> Result<StatusCode, StatusCode> {
     let task_service = TaskService::new(state.db.clone());
 
-    match task_service.complete_iteration(&task_id, payload.status).await {
+    match task_service
+        .complete_iteration(&task_id, payload.status)
+        .await
+    {
         Ok(()) => {
-            tracing::info!(
-                "Task {} status updated to {:?}",
-                task_id,
-                payload.status
-            );
+            tracing::info!("Task {} status updated to {:?}", task_id, payload.status);
             Ok(StatusCode::NO_CONTENT)
         }
         Err(e) => {

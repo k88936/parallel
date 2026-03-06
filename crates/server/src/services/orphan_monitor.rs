@@ -22,14 +22,14 @@ impl OrphanMonitor {
 
     pub async fn run(self) {
         let mut ticker = interval(Duration::from_secs(self.check_interval_seconds));
-        
+
         loop {
             ticker.tick().await;
-            
+
             if let Err(e) = self.check_orphans().await {
                 error!("Orphan monitor error: {}", e);
             }
-            
+
             if let Err(e) = self.check_timeouts().await {
                 error!("Timeout monitor error: {}", e);
             }
@@ -46,12 +46,15 @@ impl OrphanMonitor {
             return Ok(());
         }
 
-        info!("Found {} orphaned tasks (no active worker)", orphaned_tasks.len());
+        info!(
+            "Found {} orphaned tasks (no active worker)",
+            orphaned_tasks.len()
+        );
 
         for task in orphaned_tasks {
             if let Some(worker_id) = task.claimed_by {
                 let worker = worker_service.get(&worker_id).await;
-                
+
                 if let Ok(worker) = worker {
                     if worker.status != WorkerStatus::Offline {
                         continue;
@@ -63,10 +66,7 @@ impl OrphanMonitor {
                     task.id, worker_id
                 );
             } else {
-                warn!(
-                    "Re-queuing orphaned task {} (no worker assigned)",
-                    task.id
-                );
+                warn!("Re-queuing orphaned task {} (no worker assigned)", task.id);
             }
 
             if let Err(e) = task_service.requeue_task(&task.id).await {
@@ -105,9 +105,12 @@ impl OrphanMonitor {
 
 pub fn spawn_orphan_monitor(state: AppState, check_interval_seconds: u64) {
     let monitor = OrphanMonitor::new(state, check_interval_seconds);
-    
+
     tokio::spawn(async move {
-        info!("Orphan monitor started (interval: {}s)", check_interval_seconds);
+        info!(
+            "Orphan monitor started (interval: {}s)",
+            check_interval_seconds
+        );
         monitor.run().await;
     });
 }

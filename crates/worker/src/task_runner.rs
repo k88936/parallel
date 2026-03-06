@@ -2,11 +2,13 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tokio_util::sync::CancellationToken;
 
 use agent_client_protocol as acp;
-use agent_client_protocol::{Agent as _, ClientCapabilities as AcpClientCapabilities, FileSystemCapability, ContentBlock};
+use agent_client_protocol::{
+    Agent as _, ClientCapabilities as AcpClientCapabilities, ContentBlock, FileSystemCapability,
+};
 
 use parallel_protocol::{HumanFeedback, WorkerEvent};
 
@@ -26,11 +28,7 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(
-        task_id: uuid::Uuid,
-        task_description: String,
-        workdir: PathBuf,
-    ) -> Self {
+    pub fn new(task_id: uuid::Uuid, task_description: String, workdir: PathBuf) -> Self {
         Self {
             task_id,
             task_description,
@@ -38,14 +36,14 @@ impl TaskRunner {
         }
     }
 
-   pub async fn run(
-       self,
-       cancel_token: CancellationToken,
-       event_tx: mpsc::Sender<WorkerEvent>,
-       mut instruction_rx: mpsc::Receiver<TaskInstruction>,
+    pub async fn run(
+        self,
+        cancel_token: CancellationToken,
+        event_tx: mpsc::Sender<WorkerEvent>,
+        mut instruction_rx: mpsc::Receiver<TaskInstruction>,
     ) -> Result<()> {
-        let agent_path = which::which("opencode")
-            .map_err(|_| anyhow::anyhow!("Agent binary not found"))?;
+        let agent_path =
+            which::which("opencode").map_err(|_| anyhow::anyhow!("Agent binary not found"))?;
 
         let mut child = tokio::process::Command::new(&agent_path)
             .args(["acp"])
@@ -69,7 +67,7 @@ impl TaskRunner {
             if let Some(pid) = pid {
                 #[cfg(unix)]
                 {
-                    use nix::sys::signal::{kill, Signal};
+                    use nix::sys::signal::{Signal, kill};
                     use nix::unistd::Pid;
                     let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
                 }

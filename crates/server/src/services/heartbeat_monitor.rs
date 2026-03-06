@@ -24,10 +24,10 @@ impl HeartbeatMonitor {
 
     pub async fn run(self) {
         let mut ticker = interval(Duration::from_secs(self.check_interval_seconds));
-        
+
         loop {
             ticker.tick().await;
-            
+
             if let Err(e) = self.check_workers().await {
                 error!("Heartbeat monitor error: {}", e);
             }
@@ -38,7 +38,9 @@ impl HeartbeatMonitor {
         let worker_service = WorkerService::new(self.state.db.clone());
         let task_service = TaskService::new(self.state.db.clone());
 
-        let stale_workers = worker_service.find_stale_workers(self.timeout_seconds).await?;
+        let stale_workers = worker_service
+            .find_stale_workers(self.timeout_seconds)
+            .await?;
 
         if stale_workers.is_empty() {
             return Ok(());
@@ -50,7 +52,10 @@ impl HeartbeatMonitor {
                 worker_id, self.timeout_seconds
             );
 
-            if let Err(e) = worker_service.update_status(&worker_id, WorkerStatus::Offline).await {
+            if let Err(e) = worker_service
+                .update_status(&worker_id, WorkerStatus::Offline)
+                .await
+            {
                 error!("Failed to mark worker {} as Offline: {}", worker_id, e);
                 continue;
             }
@@ -64,8 +69,12 @@ impl HeartbeatMonitor {
 
                 match task_service.requeue_tasks(&running_tasks).await {
                     Ok(count) => {
-                        info!("Successfully re-queued {}/{} tasks from worker {}", 
-                              count, running_tasks.len(), worker_id);
+                        info!(
+                            "Successfully re-queued {}/{} tasks from worker {}",
+                            count,
+                            running_tasks.len(),
+                            worker_id
+                        );
                     }
                     Err(e) => {
                         error!("Failed to re-queue tasks from worker {}: {}", worker_id, e);
@@ -84,10 +93,12 @@ impl HeartbeatMonitor {
 
 pub fn spawn_heartbeat_monitor(state: AppState, timeout_seconds: i64, check_interval_seconds: u64) {
     let monitor = HeartbeatMonitor::new(state, timeout_seconds, check_interval_seconds);
-    
+
     tokio::spawn(async move {
-        info!("Heartbeat monitor started (timeout: {}s, interval: {}s)", 
-              timeout_seconds, check_interval_seconds);
+        info!(
+            "Heartbeat monitor started (timeout: {}s, interval: {}s)",
+            timeout_seconds, check_interval_seconds
+        );
         monitor.run().await;
     });
 }

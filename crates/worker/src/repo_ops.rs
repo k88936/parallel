@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use git2::{
-    build::RepoBuilder, Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, Signature,
+    Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, Signature, build::RepoBuilder,
 };
 use std::path::Path;
 
@@ -108,10 +108,11 @@ impl GitOps {
         let parents: Vec<_> = match head {
             Some(h) => {
                 let target = h.target().context("HEAD has no target")?;
-                vec![self
-                    .repo
-                    .find_commit(target)
-                    .context("Failed to find commit")?]
+                vec![
+                    self.repo
+                        .find_commit(target)
+                        .context("Failed to find commit")?,
+                ]
             }
             None => vec![],
         };

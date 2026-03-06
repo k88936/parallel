@@ -138,7 +138,11 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()> {
+    pub async fn set_claimed_by(
+        &self,
+        task_id: &Uuid,
+        worker_id: Option<Uuid>,
+    ) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -172,7 +176,11 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn set_review_data(&self, task_id: &Uuid, review_data: ReviewData) -> ServerResult<()> {
+    pub async fn set_review_data(
+        &self,
+        task_id: &Uuid,
+        review_data: ReviewData,
+    ) -> ServerResult<()> {
         let now = Utc::now();
         let task = tasks::Entity::find_by_id(*task_id)
             .one(&self.db)
@@ -232,8 +240,11 @@ impl TaskService {
             .ok_or_else(|| ServerError::TaskNotFound(*task_id))?;
 
         let current_status = TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created);
-        
-        if !matches!(current_status, TaskStatus::InProgress | TaskStatus::Claimed | TaskStatus::AwaitingReview) {
+
+        if !matches!(
+            current_status,
+            TaskStatus::InProgress | TaskStatus::Claimed | TaskStatus::AwaitingReview
+        ) {
             return Ok(());
         }
 
