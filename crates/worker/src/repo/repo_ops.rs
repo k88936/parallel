@@ -4,7 +4,6 @@ use git2::{
     build::RepoBuilder,
 };
 use std::path::Path;
-use std::process::Command;
 
 pub struct GitOps {
     repo: Repository,
@@ -198,20 +197,6 @@ impl GitOps {
             .fetch(&[] as &[&str], Some(&mut fo), None)
             .context("Failed to fetch")?;
 
-        Ok(())
-    }
-
-    pub fn delete_branch_if_exists(&self, branch: &str) -> Result<()> {
-        match self.repo.find_branch(branch, git2::BranchType::Local) {
-            Ok(mut b) => {
-                b.delete().context("Failed to delete branch")?;
-            }
-            Err(e) => {
-                if e.code() != git2::ErrorCode::NotFound {
-                    tracing::debug!("Branch delete info: {}", e);
-                }
-            }
-        }
         Ok(())
     }
 }
