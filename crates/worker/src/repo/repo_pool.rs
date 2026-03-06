@@ -1,3 +1,4 @@
+use crate::repo::repo_ops::GitOps;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -5,7 +6,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 use uuid::Uuid;
-use crate::repo::repo_ops::GitOps;
 
 struct RepoSlot {
     slot_id: u32,
@@ -120,9 +120,7 @@ impl RepoPool {
         git.fetch(ssh_key)?;
 
         git.force_checkout(base_branch)?;
-
         git.delete_branch_if_exists(target_branch)?;
-
         git.create_branch(target_branch)?;
 
         Ok(())

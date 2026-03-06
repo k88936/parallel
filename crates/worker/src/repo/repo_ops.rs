@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use git2::{
-    Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, Signature, build::RepoBuilder,
+    Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, ResetType, Signature,
+    build::RepoBuilder,
 };
 use std::path::Path;
 
@@ -222,11 +223,18 @@ impl GitOps {
             }
         };
 
-        let tree = commit.tree().context("Failed to get tree")?;
+        self.repo.reset(commit.as_object(), ResetType::Hard, None)?;
 
-        self.repo
-            .checkout_tree(tree.as_object(), None)
-            .context("Failed to checkout tree")?;
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(true);
+        for entry in self.repo.statuses(Some(&mut opts))?.iter() {
+            if entry.status().contains(git2::Status::WT_NEW) {
+                if let Some(path) = entry.path() {
+                    std::fs::remove_file(path)?;
+                }
+            }
+        }
+
         Ok(())
     }
 
