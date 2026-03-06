@@ -143,7 +143,7 @@ web/
 ```rust
 enum TaskStatus {
     Created, Queued, Claimed, InProgress,
-    AwaitingReview, Iterating, Completed,
+    AwaitingReview, PendingRework, Completed,
     Cancelled, Failed,
 }
 ```

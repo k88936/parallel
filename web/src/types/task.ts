@@ -4,7 +4,7 @@ export type TaskStatus =
     | 'claimed'
     | 'in_progress'
     | 'awaiting_review'
-    | 'iterating'
+    | 'pending_rework'
     | 'completed'
     | 'cancelled'
     | 'failed';
