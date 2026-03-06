@@ -13,10 +13,6 @@ impl GitOps {
         let repo = Repository::open(repo_path).context("Failed to open repository")?;
         Ok(Self { repo })
     }
-
-    pub fn repo_path(&self) -> &Path {
-        self.repo.path().parent().unwrap_or(self.repo.path())
-    }
 }
 
 fn create_remote_callbacks(ssh_key: &str) -> RemoteCallbacks<'_> {

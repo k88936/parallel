@@ -118,28 +118,6 @@ impl APIClient {
 
         Ok(false)
     }
-
-    pub async fn create_task(&self, request: CreateTaskRequest) -> Result<Uuid> {
-        let url = format!("{}/api/tasks", self.base_url);
-
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to create task")?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("Failed to create task: status {}", response.status());
-        }
-
-        response
-            .json::<CreateTaskResponse>()
-            .await
-            .context("Failed to parse create task response")
-            .map(|r| r.task_id)
-    }
 }
 
 #[derive(Debug, serde::Serialize)]
