@@ -364,3 +364,66 @@ pub async fn update_task_status(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub async fn retry_task(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path(task_id): Path<Uuid>,
+    Json(payload): Json<RetryTaskRequest>,
+) -> ApiResult<Json<RetryTaskResponse>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        clear_review_data = ?payload.clear_review_data,
+        "Retrying task"
+    );
+
+    let clear_review_data = payload.clear_review_data.unwrap_or(false);
+
+    let task = state
+        .task_service
+        .retry_task(&task_id, clear_review_data)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                error = %e,
+                "Failed to retry task"
+            );
+
+            let error_response = match e {
+                ServerError::InvalidStatus(msg) => ErrorResponse::new(
+                    ErrorCode::TaskNotRetryable,
+                    msg,
+                )
+                .with_metadata("task_id", serde_json::json!(task_id)),
+                ServerError::TaskNotFound(id) => ErrorResponse::new(
+                    ErrorCode::TaskNotFound,
+                    format!("Task with ID {} not found", id),
+                )
+                .with_metadata("task_id", serde_json::json!(id)),
+                other => ErrorResponse::from(other),
+            };
+
+            error_response.with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        status = ?task.status,
+        "Task retried successfully"
+    );
+
+    Ok(Json(RetryTaskResponse {
+        task_id: task.id,
+        status: task.status,
+    }))
+}

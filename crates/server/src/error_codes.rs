@@ -16,6 +16,7 @@ pub enum ErrorCode {
     FeedbackRejected,
     OperationTimeout,
     ServiceUnavailable,
+    TaskNotRetryable,
 }
 
 impl ErrorCode {
@@ -33,6 +34,7 @@ impl ErrorCode {
             | ErrorCode::TaskCreationFailed => StatusCode::INTERNAL_SERVER_ERROR,
             ErrorCode::OperationTimeout => StatusCode::REQUEST_TIMEOUT,
             ErrorCode::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCode::TaskNotRetryable => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -51,6 +53,7 @@ impl ErrorCode {
             ErrorCode::FeedbackRejected => "FEEDBACK_REJECTED",
             ErrorCode::OperationTimeout => "OPERATION_TIMEOUT",
             ErrorCode::ServiceUnavailable => "SERVICE_UNAVAILABLE",
+            ErrorCode::TaskNotRetryable => "TASK_NOT_RETRYABLE",
         }
     }
 }

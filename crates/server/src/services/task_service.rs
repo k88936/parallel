@@ -422,4 +422,37 @@ impl TaskServiceTrait for TaskService {
 
         Ok(())
     }
+
+    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task> {
+        let now = Utc::now();
+        let task = tasks::Entity::find_by_id(*task_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| ServerError::TaskNotFound(*task_id))?;
+
+        let current_status = TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created);
+
+        if !matches!(
+            current_status,
+            TaskStatus::Failed | TaskStatus::Cancelled | TaskStatus::Completed
+        ) {
+            return Err(ServerError::InvalidStatus(format!(
+                "Task with status '{}' cannot be retried. Only Failed, Cancelled, or Completed tasks can be retried.",
+                current_status.as_str()
+            )));
+        }
+
+        let mut task: tasks::ActiveModel = task.into();
+        task.status = Set(TaskStatus::Queued.as_str().to_string());
+        task.claimed_by = Set(None);
+        task.updated_at = Set(now);
+        
+        if clear_review_data {
+            task.review_data_json = Set(None);
+        }
+
+        let updated = task.update(&self.db).await?;
+
+        Ok(model_to_task(updated))
+    }
 }

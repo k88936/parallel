@@ -73,6 +73,8 @@ pub trait TaskServiceTrait: Send + Sync {
     async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>>;
 
     async fn fail_task(&self, task_id: &Uuid, reason: &str) -> ServerResult<()>;
+
+    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task>;
 }
 
 #[async_trait]

@@ -136,6 +136,10 @@ mod tests {
         async fn fail_task(&self, _task_id: &Uuid, _reason: &str) -> ServerResult<()> {
             Ok(())
         }
+
+        async fn retry_task(&self, _task_id: &Uuid, _clear_review_data: bool) -> ServerResult<Task> {
+            Err(ServerError::TaskNotFound(Uuid::nil()))
+        }
     }
 
     struct MockWorkerService {

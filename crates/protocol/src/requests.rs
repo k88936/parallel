@@ -89,3 +89,14 @@ pub struct PushEventsRequest {
 pub struct PushEventsResponse {
     pub acknowledged: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryTaskRequest {
+    pub clear_review_data: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryTaskResponse {
+    pub task_id: Uuid,
+    pub status: TaskStatus,
+}
