@@ -46,21 +46,15 @@ impl Worker {
             repo_pool,
         }
     }
-
-    pub async fn foo(&mut self, name: &str) -> Result<()> {
+    pub async fn load_token(&mut self, name: &str) -> Result<()> {
         self.name = name.to_string();
-
         if let Some(config) = WorkerConfig::load(&self.work_base)? {
             info!("Found existing worker config, validating stored token");
             self.token = Some(config.token);
         }
-
-        if self.token.is_none() {
-            self.register().await?;
-        }
-
         Ok(())
     }
+
 
     async fn register(&mut self) -> Result<()> {
         let capabilities = WorkerCapabilities::default();
@@ -127,7 +121,7 @@ impl Worker {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             if self.token.is_none() {
-                self.do_register().await?;
+                self.register().await?;
             }
 
             let token = self.token.clone().unwrap();

@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut worker = parallel_worker::Worker::new(work_base, max_concurrent, server_url);
 
+    worker.load_token(&worker_name).await?;
     info!("Starting worker main loop");
     worker.run().await?;
 
