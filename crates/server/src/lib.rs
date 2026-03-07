@@ -6,6 +6,8 @@ pub mod middleware;
 pub mod controller;
 pub mod service;
 pub mod state;
+pub mod cron;
+pub mod repository;
 
 use std::sync::Arc;
 
