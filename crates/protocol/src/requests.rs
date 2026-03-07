@@ -71,7 +71,7 @@ pub struct RegisterWorkerRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PollRequest {
-    pub worker_id: Uuid,
+    pub token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +81,7 @@ pub struct PollResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushEventsRequest {
-    pub worker_id: Uuid,
+    pub token: String,
     pub events: Vec<super::WorkerEvent>,
 }
 

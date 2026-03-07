@@ -81,14 +81,13 @@ impl APIClient {
         Ok(worker_info)
     }
 
-    pub async fn poll_instructions(&self, worker_id: Uuid) -> Result<Vec<WorkerInstruction>> {
+    pub async fn poll_instructions(&self, token: String) -> Result<Vec<WorkerInstruction>> {
         let correlation_id = Uuid::new_v4();
         let url = format!("{}/api/workers/poll", self.base_url);
-        let request = PollRequest { worker_id };
+        let request = PollRequest { token: token.clone() };
 
         debug!(
             correlation_id = %correlation_id,
-            worker_id = %worker_id,
             "Polling for instructions"
         );
 
@@ -100,6 +99,10 @@ impl APIClient {
             .send()
             .await
             .context("Failed to poll instructions")?;
+
+        if response.status().as_u16() == 401 {
+            anyhow::bail!("Token invalid or expired");
+        }
 
         if !response.status().is_success() {
             let status = response.status();
@@ -118,7 +121,6 @@ impl APIClient {
 
         debug!(
             correlation_id = %correlation_id,
-            worker_id = %worker_id,
             instruction_count = poll_response.instructions.len(),
             "Received instructions"
         );
@@ -128,41 +130,37 @@ impl APIClient {
 
     pub async fn push_events(
         &self,
-        worker_id: Uuid,
+        token: String,
         events: Vec<WorkerEvent>,
     ) -> Result<bool> {
         let correlation_id = Uuid::new_v4();
         
         debug!(
             correlation_id = %correlation_id,
-            worker_id = %worker_id,
             event_count = events.len(),
             "Pushing events to server"
         );
 
         let result = self
-            .push_events_with_backoff(worker_id, events.clone(), correlation_id)
+            .push_events_with_backoff(token, events.clone(), correlation_id)
             .await;
 
         match &result {
             Ok(true) => {
                 debug!(
                     correlation_id = %correlation_id,
-                    worker_id = %worker_id,
                     "Events pushed successfully"
                 );
             }
             Ok(false) => {
                 warn!(
                     correlation_id = %correlation_id,
-                    worker_id = %worker_id,
                     "Events not acknowledged by server"
                 );
             }
             Err(e) => {
                 warn!(
                     correlation_id = %correlation_id,
-                    worker_id = %worker_id,
                     error = %e,
                     "Failed to push events after retries"
                 );
@@ -174,7 +172,7 @@ impl APIClient {
 
     async fn push_events_with_backoff(
         &self,
-        worker_id: Uuid,
+        token: String,
         events: Vec<WorkerEvent>,
         correlation_id: Uuid,
     ) -> Result<bool> {
@@ -185,7 +183,7 @@ impl APIClient {
         loop {
             attempt += 1;
             let request = PushEventsRequest {
-                worker_id,
+                token: token.clone(),
                 events: events.clone(),
             };
 
@@ -206,6 +204,17 @@ impl APIClient {
                 }
                 Ok(response) => {
                     let status = response.status();
+                    
+                    if status.as_u16() == 401 {
+                        warn!(
+                            correlation_id = %correlation_id,
+                            attempt = attempt,
+                            status = %status,
+                            "Token invalid, not retrying"
+                        );
+                        anyhow::bail!("Token invalid or expired");
+                    }
+                    
                     let body = response.text().await.unwrap_or_default();
                     let err_msg =
                         format!("Server returned error: status {}, body: {}", status, body);
@@ -213,7 +222,6 @@ impl APIClient {
                     if status.is_client_error() {
                         warn!(
                             correlation_id = %correlation_id,
-                            worker_id = %worker_id,
                             attempt = attempt,
                             status = %status,
                             "Client error, not retrying"
@@ -225,7 +233,6 @@ impl APIClient {
 
                     warn!(
                         correlation_id = %correlation_id,
-                        worker_id = %worker_id,
                         attempt = attempt,
                         status = %status,
                         retry_after_ms = delay.as_millis(),
@@ -247,7 +254,6 @@ impl APIClient {
 
                     warn!(
                         correlation_id = %correlation_id,
-                        worker_id = %worker_id,
                         attempt = attempt,
                         error = %e,
                         retry_after_ms = delay.as_millis(),

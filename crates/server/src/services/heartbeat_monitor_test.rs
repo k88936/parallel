@@ -11,6 +11,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use uuid::Uuid;
+    use crate::services::traits::{TaskListParams, TaskListResult};
 
     struct MockTaskService {
         requeued_tasks: Arc<Mutex<Vec<Uuid>>>,
@@ -38,6 +39,7 @@ mod tests {
     impl TaskServiceTrait for MockTaskService {
         async fn create(
             &self,
+            _title: String,
             _repo_url: String,
             _description: String,
             _base_branch: String,
@@ -53,14 +55,15 @@ mod tests {
             Err(ServerError::TaskNotFound(Uuid::nil()))
         }
 
-        async fn list(
-            &self,
-            _status: Option<TaskStatus>,
-            _limit: Option<u64>,
-            _offset: Option<u64>,
-        ) -> anyhow::Result<Vec<Task>> {
-            Ok(Vec::new())
+        async fn list(&self, params: TaskListParams) -> anyhow::Result<TaskListResult> {
+            Ok(TaskListResult {
+                tasks: Vec::new(),
+                total: 0,
+                next_cursor: None,
+                has_more: false,
+            })
         }
+
 
         async fn count(&self, _status: Option<TaskStatus>) -> anyhow::Result<u64> {
             Ok(0)
@@ -188,6 +191,7 @@ mod tests {
         ) -> ServerResult<WorkerInfo> {
             Ok(WorkerInfo {
                 id: Uuid::new_v4(),
+                token: Uuid::new_v4().to_string(),
                 name: "test".to_string(),
                 status: WorkerStatus::Idle,
                 last_heartbeat: Utc::now(),
@@ -207,6 +211,7 @@ mod tests {
                 .unwrap_or(WorkerStatus::Idle);
             Ok(WorkerInfo {
                 id: *worker_id,
+                token: Uuid::new_v4().to_string(),
                 name: "test-worker".to_string(),
                 status,
                 last_heartbeat: Utc::now(),
@@ -214,6 +219,10 @@ mod tests {
                 capabilities: WorkerCapabilities::default(),
                 max_concurrent: 1,
             })
+        }
+
+        async fn get_by_token(&self, _token: &str) -> ServerResult<WorkerInfo> {
+            Err(ServerError::InvalidToken)
         }
 
         async fn list(&self) -> ServerResult<Vec<WorkerInfo>> {

@@ -10,6 +10,7 @@ use tracing::{debug, error, info, warn};
 use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInstruction};
 
 use crate::api_client::APIClient;
+use crate::config::WorkerConfig;
 use crate::repo::repo_ops::GitOps;
 use crate::repo::repo_pool::RepoPool;
 use crate::code::task_runner::TaskRunner;
@@ -22,8 +23,11 @@ struct RunningTask {
 }
 
 pub struct Worker {
+    work_base: PathBuf,
     max_concurrent: usize,
+    name: String,
     api_client: Arc<APIClient>,
+    token: Option<String>,
     worker_id: uuid::Uuid,
     running_tasks: Arc<RwLock<HashMap<uuid::Uuid, RunningTask>>>,
     repo_pool: Arc<RepoPool>,
@@ -35,8 +39,11 @@ impl Worker {
         let repo_pool = Arc::new(RepoPool::new(repo_pool_base));
 
         Self {
+            work_base: work_base.clone(),
             max_concurrent,
+            name: String::new(),
             api_client: Arc::new(APIClient::new(server_url)),
+            token: None,
             worker_id: uuid::Uuid::nil(),
             running_tasks: Arc::new(RwLock::new(HashMap::new())),
             repo_pool,
@@ -44,6 +51,33 @@ impl Worker {
     }
 
     pub async fn register(&mut self, name: &str) -> Result<()> {
+        self.name = name.to_string();
+        
+        if let Some(config) = WorkerConfig::load(&self.work_base)? {
+            info!(
+                "Found existing worker config, attempting to use stored token"
+            );
+            self.token = Some(config.token);
+            
+            match self.api_client.poll_instructions(self.token.clone().unwrap()).await {
+                Ok(_) => {
+                    info!("Stored token is valid");
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        "Stored token is invalid, will re-register"
+                    );
+                    self.token = None;
+                }
+            }
+        }
+
+        self.do_register().await
+    }
+
+    async fn do_register(&mut self) -> Result<()> {
         let capabilities = WorkerCapabilities::default();
         let mut delay = Duration::from_secs(1);
         let max_delay = Duration::from_secs(60);
@@ -51,14 +85,24 @@ impl Worker {
         loop {
             match self
                 .api_client
-                .register(name.to_string(), capabilities.clone(), self.max_concurrent)
+                .register(self.name.clone(), capabilities.clone(), self.max_concurrent)
                 .await
             {
                 Ok(worker_info) => {
                     self.worker_id = worker_info.id;
+                    self.token = Some(worker_info.token.clone());
+                    
+                    let config = WorkerConfig::new(worker_info.token);
+                    if let Err(e) = config.save(&self.work_base) {
+                        warn!(
+                            error = %e,
+                            "Failed to save worker config"
+                        );
+                    }
+                    
                     info!(
                         worker_id = %self.worker_id,
-                        worker_name = %name,
+                        worker_name = %self.name,
                         "Worker registered successfully"
                     );
                     return Ok(());
@@ -77,9 +121,9 @@ impl Worker {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        if self.worker_id == uuid::Uuid::nil() {
-            anyhow::bail!("Worker not registered. Call register() first.");
-        }
+        let token = self.token.clone().ok_or_else(|| {
+            anyhow::anyhow!("Worker not registered. Call register() first.")
+        })?;
 
         info!(
             worker_id = %self.worker_id,
@@ -87,12 +131,22 @@ impl Worker {
             "Worker starting main loop"
         );
 
-        let worker_id = self.worker_id;
         let api_client = self.api_client.clone();
         let running_tasks = self.running_tasks.clone();
+        let work_base = self.work_base.clone();
+        let name = self.name.clone();
+        let max_concurrent = self.max_concurrent;
+
+        let token = Arc::new(RwLock::new(token));
+        let worker_id = Arc::new(RwLock::new(self.worker_id));
 
         let (event_tx, mut event_rx) = mpsc::channel(100);
 
+        let token_clone = token.clone();
+        let worker_id_clone = worker_id.clone();
+        let api_client_clone = api_client.clone();
+        let running_tasks_clone = running_tasks.clone();
+        
         tokio::spawn(async move {
             let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10));
             let mut pending_events: Vec<WorkerEvent> = Vec::new();
@@ -100,12 +154,13 @@ impl Worker {
             loop {
                 tokio::select! {
                     _ = heartbeat_interval.tick() => {
-                        let tasks = running_tasks.read().await;
+                        let tasks = running_tasks_clone.read().await;
                         let running_task_ids: Vec<uuid::Uuid> = tasks.keys().copied().collect();
                         drop(tasks);
 
+                        let wid = *worker_id_clone.read().await;
                         debug!(
-                            worker_id = %worker_id,
+                            worker_id = %wid,
                             running_task_count = running_task_ids.len(),
                             "Sending heartbeat"
                         );
@@ -122,15 +177,19 @@ impl Worker {
 
                 if !pending_events.is_empty() {
                     let events_to_send = std::mem::take(&mut pending_events);
+                    let current_token = token_clone.read().await.clone();
 
-                    match api_client
-                        .push_events(worker_id, events_to_send.clone())
-                        .await
-                    {
+                    match api_client_clone.push_events(current_token, events_to_send.clone()).await {
                         Ok(true) => {
                             pending_events.clear();
                         }
-                        Ok(false) | Err(_) => {
+                        Ok(false) => {
+                            pending_events = events_to_send;
+                        }
+                        Err(e) => {
+                            if e.to_string().contains("Token invalid") {
+                                warn!("Token invalid during push_events, need to re-register");
+                            }
                             pending_events = events_to_send;
                         }
                     }
@@ -143,11 +202,14 @@ impl Worker {
         loop {
             tokio::select! {
                 _ = poll_interval.tick() => {
-                    match self.api_client.poll_instructions(self.worker_id).await {
+                    let current_token = token.read().await.clone();
+                    
+                    match self.api_client.poll_instructions(current_token).await {
                         Ok(instructions) => {
                             if !instructions.is_empty() {
+                                let wid = *worker_id.read().await;
                                 debug!(
-                                    worker_id = %self.worker_id,
+                                    worker_id = %wid,
                                     instruction_count = instructions.len(),
                                     "Received instructions"
                                 );
@@ -157,11 +219,37 @@ impl Worker {
                             }
                         }
                         Err(e) => {
+                            let wid = *worker_id.read().await;
                             warn!(
-                                worker_id = %self.worker_id,
+                                worker_id = %wid,
                                 error = %e,
                                 "Failed to poll instructions"
                             );
+                            
+                            if e.to_string().contains("Token invalid") {
+                                info!("Token invalid, re-registering...");
+                                
+                                let capabilities = WorkerCapabilities::default();
+                                match self.api_client.register(name.clone(), capabilities, max_concurrent).await {
+                                    Ok(worker_info) => {
+                                        *token.write().await = worker_info.token.clone();
+                                        *worker_id.write().await = worker_info.id;
+                                        
+                                        let config = WorkerConfig::new(worker_info.token);
+                                        if let Err(e) = config.save(&work_base) {
+                                            warn!(error = %e, "Failed to save worker config after re-registration");
+                                        }
+                                        
+                                        info!(
+                                            worker_id = %worker_info.id,
+                                            "Re-registered successfully"
+                                        );
+                                    }
+                                    Err(e) => {
+                                        warn!(error = %e, "Failed to re-register");
+                                    }
+                                }
+                            }
                         }
                     }
                 }

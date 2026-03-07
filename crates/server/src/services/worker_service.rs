@@ -28,11 +28,13 @@ impl WorkerServiceTrait for WorkerService {
         max_concurrent: usize,
     ) -> ServerResult<WorkerInfo> {
         let worker_id = Uuid::new_v4();
+        let token = Uuid::new_v4().to_string();
         let now = Utc::now();
         let capabilities_json = serde_json::to_string(&capabilities)?;
 
         let worker = workers::ActiveModel {
             id: Set(worker_id),
+            token: Set(token.clone()),
             name: Set(name.clone()),
             status: Set(WorkerStatus::Idle.as_str().to_string()),
             last_heartbeat: Set(now),
@@ -46,6 +48,7 @@ impl WorkerServiceTrait for WorkerService {
 
         Ok(WorkerInfo {
             id: worker_id,
+            token,
             name,
             status: WorkerStatus::Idle,
             last_heartbeat: now,
@@ -63,6 +66,26 @@ impl WorkerServiceTrait for WorkerService {
 
         Ok(WorkerInfo {
             id: worker.id,
+            token: worker.token,
+            name: worker.name,
+            status: WorkerStatus::from_str(&worker.status).unwrap_or(WorkerStatus::Offline),
+            last_heartbeat: worker.last_heartbeat,
+            current_tasks: serde_json::from_str(&worker.current_tasks_json)?,
+            capabilities: serde_json::from_str(&worker.capabilities_json)?,
+            max_concurrent: worker.max_concurrent as usize,
+        })
+    }
+
+    async fn get_by_token(&self, token: &str) -> ServerResult<WorkerInfo> {
+        let worker = workers::Entity::find()
+            .filter(workers::Column::Token.eq(token))
+            .one(&self.db)
+            .await?
+            .ok_or(ServerError::InvalidToken)?;
+
+        Ok(WorkerInfo {
+            id: worker.id,
+            token: worker.token,
             name: worker.name,
             status: WorkerStatus::from_str(&worker.status).unwrap_or(WorkerStatus::Offline),
             last_heartbeat: worker.last_heartbeat,
@@ -80,6 +103,7 @@ impl WorkerServiceTrait for WorkerService {
             .map(|w| {
                 Ok(WorkerInfo {
                     id: w.id,
+                    token: w.token,
                     name: w.name,
                     status: WorkerStatus::from_str(&w.status).unwrap_or(WorkerStatus::Offline),
                     last_heartbeat: w.last_heartbeat,

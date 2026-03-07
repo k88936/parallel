@@ -75,6 +75,9 @@ impl From<crate::errors::ServerError> for ErrorResponse {
                 format!("Worker with ID {} not found", id),
             )
             .with_metadata("worker_id", serde_json::json!(id)),
+            ServerError::InvalidToken => {
+                ErrorResponse::new(ErrorCode::InvalidToken, "Invalid or expired token")
+            }
             ServerError::InvalidStatus(s) => {
                 ErrorResponse::new(ErrorCode::InvalidStatus, format!("Invalid status: {}", s))
             }

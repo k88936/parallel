@@ -56,6 +56,7 @@ impl Default for WorkerCapabilities {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {
     pub id: Uuid,
+    pub token: String,
     pub name: String,
     pub status: WorkerStatus,
     pub last_heartbeat: DateTime<Utc>,

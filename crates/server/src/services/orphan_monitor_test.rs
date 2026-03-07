@@ -177,6 +177,7 @@ mod tests {
         ) -> ServerResult<WorkerInfo> {
             Ok(WorkerInfo {
                 id: Uuid::new_v4(),
+                token: Uuid::new_v4().to_string(),
                 name: "test".to_string(),
                 status: WorkerStatus::Idle,
                 last_heartbeat: Utc::now(),
@@ -193,6 +194,10 @@ mod tests {
                 .get(worker_id)
                 .cloned()
                 .ok_or(ServerError::WorkerNotFound(*worker_id))
+        }
+
+        async fn get_by_token(&self, _token: &str) -> ServerResult<WorkerInfo> {
+            Err(ServerError::InvalidToken)
         }
 
         async fn list(&self) -> ServerResult<Vec<WorkerInfo>> {
@@ -260,6 +265,7 @@ mod tests {
     fn create_test_worker(id: Uuid, status: WorkerStatus) -> WorkerInfo {
         WorkerInfo {
             id,
+            token: Uuid::new_v4().to_string(),
             name: "test-worker".to_string(),
             status,
             last_heartbeat: Utc::now(),

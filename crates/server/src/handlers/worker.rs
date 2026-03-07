@@ -66,14 +66,30 @@ pub async fn poll_instructions(
         .ok()
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    let mut instructions = state
-        .coordinator
-        .get_pending_instructions(&payload.worker_id)
+    let worker_info = state
+        .worker_service
+        .get_by_token(&payload.token)
         .await
         .map_err(|e| {
             tracing::error!(
                 correlation_id = ?correlation_id,
-                worker_id = %payload.worker_id,
+                error = %e,
+                "Invalid token for poll"
+            );
+            ErrorResponse::from(ServerError::InvalidToken)
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    let worker_id = worker_info.id;
+
+    let mut instructions = state
+        .coordinator
+        .get_pending_instructions(&worker_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                worker_id = %worker_id,
                 error = %e,
                 "Failed to poll instructions"
             );
@@ -85,12 +101,12 @@ pub async fn poll_instructions(
         return Ok(Json(PollResponse { instructions }));
     }
 
-    let has_slot = match state.worker_service.has_available_slot(&payload.worker_id).await {
+    let has_slot = match state.worker_service.has_available_slot(&worker_id).await {
         Ok(has_slot) => has_slot,
         Err(e) => {
             tracing::error!(
                 correlation_id = ?correlation_id,
-                worker_id = %payload.worker_id,
+                worker_id = %worker_id,
                 error = %e,
                 "Failed to check available slot"
             );
@@ -106,10 +122,10 @@ pub async fn poll_instructions(
         return Ok(Json(PollResponse { instructions }));
     };
 
-    if let Err(e) = state.worker_service.add_task(&payload.worker_id, task.id).await {
+    if let Err(e) = state.worker_service.add_task(&worker_id, task.id).await {
         tracing::error!(
             correlation_id = ?correlation_id,
-            worker_id = %payload.worker_id,
+            worker_id = %worker_id,
             task_id = %task.id,
             error = %e,
             "Failed to add task to worker"
@@ -119,12 +135,12 @@ pub async fn poll_instructions(
 
     if let Err(e) = state
         .task_service
-        .set_claimed_by(&task.id, Some(payload.worker_id))
+        .set_claimed_by(&task.id, Some(worker_id))
         .await
     {
         tracing::error!(
             correlation_id = ?correlation_id,
-            worker_id = %payload.worker_id,
+            worker_id = %worker_id,
             task_id = %task.id,
             error = %e,
             "Failed to set claimed_by"
@@ -134,7 +150,7 @@ pub async fn poll_instructions(
 
     tracing::info!(
         correlation_id = ?correlation_id,
-        worker_id = %payload.worker_id,
+        worker_id = %worker_id,
         task_id = %task.id,
         "Task assigned to worker"
     );
@@ -155,21 +171,37 @@ pub async fn push_events(
         .ok()
         .and_then(|s| Uuid::parse_str(s).ok());
 
+    let worker_info = state
+        .worker_service
+        .get_by_token(&payload.token)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                error = %e,
+                "Invalid token for push_events"
+            );
+            ErrorResponse::from(ServerError::InvalidToken)
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    let worker_id = worker_info.id;
+
     tracing::debug!(
         correlation_id = ?correlation_id,
-        worker_id = %payload.worker_id,
+        worker_id = %worker_id,
         event_count = payload.events.len(),
         "Processing worker events"
     );
 
     state
         .event_processor
-        .process_events(&payload.worker_id, payload.events)
+        .process_events(&worker_id, payload.events)
         .await
         .map_err(|e| {
             tracing::error!(
                 correlation_id = ?correlation_id,
-                worker_id = %payload.worker_id,
+                worker_id = %worker_id,
                 error = %e,
                 "Failed to process events"
             );

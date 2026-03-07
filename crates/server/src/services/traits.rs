@@ -86,6 +86,8 @@ pub trait WorkerServiceTrait: Send + Sync {
 
     async fn get(&self, worker_id: &Uuid) -> ServerResult<WorkerInfo>;
 
+    async fn get_by_token(&self, token: &str) -> ServerResult<WorkerInfo>;
+
     async fn list(&self) -> ServerResult<Vec<WorkerInfo>>;
 
     async fn update_heartbeat(

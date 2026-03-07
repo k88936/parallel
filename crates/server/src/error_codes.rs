@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 pub enum ErrorCode {
     TaskNotFound,
     WorkerNotFound,
+    InvalidToken,
     InvalidStatus,
     InvalidRequest,
     DatabaseError,
@@ -21,6 +22,7 @@ impl ErrorCode {
     pub fn http_status(&self) -> StatusCode {
         match self {
             ErrorCode::TaskNotFound | ErrorCode::WorkerNotFound => StatusCode::NOT_FOUND,
+            ErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
             ErrorCode::InvalidStatus | ErrorCode::InvalidRequest | ErrorCode::FeedbackRejected => {
                 StatusCode::BAD_REQUEST
             }
@@ -38,6 +40,7 @@ impl ErrorCode {
         match self {
             ErrorCode::TaskNotFound => "TASK_NOT_FOUND",
             ErrorCode::WorkerNotFound => "WORKER_NOT_FOUND",
+            ErrorCode::InvalidToken => "INVALID_TOKEN",
             ErrorCode::InvalidStatus => "INVALID_STATUS",
             ErrorCode::InvalidRequest => "INVALID_REQUEST",
             ErrorCode::DatabaseError => "DATABASE_ERROR",
