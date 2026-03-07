@@ -5,6 +5,8 @@ pub mod orphan_monitor;
 pub mod task_service;
 pub mod traits;
 pub mod worker_service;
+#[cfg(test)]
+mod test_utils;
 mod orphan_monitor_test;
 mod heartbeat_monitor_test;
 
