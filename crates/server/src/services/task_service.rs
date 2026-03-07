@@ -67,6 +67,7 @@ impl TaskServiceTrait for TaskService {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
+        project_id: Option<Uuid>,
     ) -> Result<Uuid> {
         let task_id = Uuid::new_v4();
         let now = Utc::now();
@@ -86,6 +87,7 @@ impl TaskServiceTrait for TaskService {
             review_data_json: Set(None),
             ssh_key: Set(ssh_key),
             max_execution_time: Set(max_execution_time),
+            project_id: Set(project_id),
         };
 
         tasks::Entity::insert(task).exec(&self.db).await?;
@@ -139,6 +141,10 @@ impl TaskServiceTrait for TaskService {
 
         if let Some(before) = params.created_before {
             query = query.filter(tasks::Column::CreatedAt.lte(before));
+        }
+
+        if let Some(project_id) = params.project_id {
+            query = query.filter(tasks::Column::ProjectId.eq(project_id));
         }
 
         let sort_by = params.sort_by.as_deref().unwrap_or("created_at");

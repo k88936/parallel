@@ -12,7 +12,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     middleware::from_fn,
 };
 use sea_orm::Database;
@@ -22,10 +22,10 @@ use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
 use db::migration::Migrator;
-use handlers::{task, worker};
+use handlers::{project, task, worker};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use services::{
-    Coordinator, EventProcessor, TaskService, WorkerService, spawn_heartbeat_monitor,
+    Coordinator, EventProcessor, ProjectService, TaskService, WorkerService, spawn_heartbeat_monitor,
     spawn_orphan_monitor,
 };
 use state::AppState;
@@ -39,6 +39,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
 
     let task_service = Arc::new(TaskService::new(db.clone()));
     let worker_service = Arc::new(WorkerService::new(db.clone()));
+    let project_service = Arc::new(ProjectService::new(db.clone()));
     let coordinator = Arc::new(Coordinator::new(db.clone()));
     let event_processor = Arc::new(EventProcessor::new(
         task_service.clone(),
@@ -48,6 +49,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     let state = AppState::new(
         task_service.clone(),
         worker_service.clone(),
+        project_service,
         coordinator,
         event_processor,
     );
@@ -84,6 +86,11 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/tasks/:id/review", get(task::get_review_data))
         .route("/api/tasks/:id/status", post(task::update_task_status))
         .route("/api/tasks/:id/retry", post(task::retry_task))
+        .route("/api/projects", post(project::create_project))
+        .route("/api/projects", get(project::list_projects))
+        .route("/api/projects/:id", get(project::get_project))
+        .route("/api/projects/:id", put(project::update_project))
+        .route("/api/projects/:id", delete(project::delete_project))
         .route("/api/workers/register", post(worker::register_worker))
         .route("/api/workers/poll", post(worker::poll_instructions))
         .route("/api/workers/events", post(worker::push_events))

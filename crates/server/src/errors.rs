@@ -5,6 +5,7 @@ use uuid::Uuid;
 pub enum ServerError {
     TaskNotFound(Uuid),
     WorkerNotFound(Uuid),
+    ProjectNotFound(Uuid),
     InvalidToken,
     InvalidStatus(String),
     DatabaseError(String),
@@ -17,6 +18,7 @@ impl std::fmt::Display for ServerError {
         match self {
             ServerError::TaskNotFound(id) => write!(f, "Task not found: {}", id),
             ServerError::WorkerNotFound(id) => write!(f, "Worker not found: {}", id),
+            ServerError::ProjectNotFound(id) => write!(f, "Project not found: {}", id),
             ServerError::InvalidToken => write!(f, "Invalid token"),
             ServerError::InvalidStatus(s) => write!(f, "Invalid status: {}", s),
             ServerError::DatabaseError(s) => write!(f, "Database error: {}", s),
@@ -33,6 +35,7 @@ impl From<ServerError> for StatusCode {
         match err {
             ServerError::TaskNotFound(_) => StatusCode::NOT_FOUND,
             ServerError::WorkerNotFound(_) => StatusCode::NOT_FOUND,
+            ServerError::ProjectNotFound(_) => StatusCode::NOT_FOUND,
             ServerError::InvalidToken => StatusCode::UNAUTHORIZED,
             ServerError::InvalidStatus(_) => StatusCode::BAD_REQUEST,
             ServerError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,

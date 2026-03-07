@@ -8,6 +8,8 @@ mod m20240307_000005_add_ssh_key_to_tasks;
 mod m20240308_000006_add_max_execution_time_to_tasks;
 mod m20240309_000007_add_title_to_tasks;
 mod m20240310_000008_add_token_to_workers;
+mod m20240311_000009_create_projects;
+mod m20240311_000010_add_project_id_to_tasks;
 
 pub struct Migrator;
 
@@ -23,6 +25,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20240308_000006_add_max_execution_time_to_tasks::Migration),
             Box::new(m20240309_000007_add_title_to_tasks::Migration),
             Box::new(m20240310_000008_add_token_to_workers::Migration),
+            Box::new(m20240311_000009_create_projects::Migration),
+            Box::new(m20240311_000010_add_project_id_to_tasks::Migration),
         ]
     }
 }

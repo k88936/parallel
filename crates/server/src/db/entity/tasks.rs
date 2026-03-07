@@ -19,6 +19,7 @@ pub struct Model {
     pub review_data_json: Option<String>,
     pub ssh_key: String,
     pub max_execution_time: i64,
+    pub project_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -29,11 +30,23 @@ pub enum Relation {
         to = "super::workers::Column::Id"
     )]
     Worker,
+    #[sea_orm(
+        belongs_to = "super::projects::Entity",
+        from = "Column::ProjectId",
+        to = "super::projects::Column::Id"
+    )]
+    Project,
 }
 
 impl Related<super::workers::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Worker.def()
+    }
+}
+
+impl Related<super::projects::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Project.def()
     }
 }
 

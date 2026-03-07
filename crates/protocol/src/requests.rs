@@ -2,18 +2,23 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{Task, TaskPriority, TaskStatus, WorkerCapabilities};
+use super::{
+    Project, RepoConfig, SshKeyConfig, Task, TaskPriority, TaskStatus, WorkerCapabilities,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
     pub title: String,
-    pub repo_url: String,
+    pub repo_url: Option<String>,
+    pub repo_ref: Option<String>,
     pub description: String,
     pub base_branch: Option<String>,
     pub target_branch: Option<String>,
     pub priority: Option<TaskPriority>,
-    pub ssh_key: String,
+    pub ssh_key: Option<String>,
+    pub ssh_key_ref: Option<String>,
     pub max_execution_time: Option<i64>,
+    pub project_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +46,7 @@ pub struct ListTasksQuery {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+    pub project_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +66,39 @@ pub struct SubmitFeedbackRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateTaskStatusRequest {
     pub status: TaskStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateProjectRequest {
+    pub name: String,
+    pub repos: Vec<RepoConfig>,
+    pub ssh_keys: Vec<SshKeyConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateProjectResponse {
+    pub project_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListProjectsQuery {
+    pub search: Option<String>,
+    pub sort_direction: Option<String>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectListResponse {
+    pub projects: Vec<Project>,
+    pub total: u64,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProjectRequest {
+    pub name: Option<String>,
+    pub repos: Option<Vec<RepoConfig>>,
+    pub ssh_keys: Option<Vec<SshKeyConfig>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

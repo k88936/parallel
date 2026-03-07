@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use parallel_protocol::{
-    HumanFeedback, ReviewData, Task, TaskPriority, TaskStatus, WorkerCapabilities, WorkerEvent,
-    WorkerInfo, WorkerInstruction, WorkerStatus,
+    HumanFeedback, Project, RepoConfig, ReviewData, SshKeyConfig, Task, TaskPriority, TaskStatus,
+    WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, WorkerStatus,
 };
 
 use crate::errors::ServerResult;
@@ -23,6 +23,7 @@ pub struct TaskListParams {
     pub cursor: Option<String>,
     pub limit: Option<u64>,
     pub offset: Option<u64>,
+    pub project_id: Option<Uuid>,
 }
 
 pub struct TaskListResult {
@@ -30,6 +31,46 @@ pub struct TaskListResult {
     pub total: u64,
     pub next_cursor: Option<String>,
     pub has_more: bool,
+}
+
+pub struct ProjectListParams {
+    pub search: Option<String>,
+    pub sort_direction: Option<String>,
+    pub limit: Option<u64>,
+}
+
+pub struct ProjectListResult {
+    pub projects: Vec<Project>,
+    pub total: u64,
+    pub has_more: bool,
+}
+
+#[async_trait]
+pub trait ProjectServiceTrait: Send + Sync {
+    async fn create(
+        &self,
+        name: String,
+        repos: Vec<RepoConfig>,
+        ssh_keys: Vec<SshKeyConfig>,
+    ) -> Result<Uuid>;
+
+    async fn get(&self, project_id: &Uuid) -> ServerResult<Project>;
+
+    async fn list(&self, params: ProjectListParams) -> Result<ProjectListResult>;
+
+    async fn update(
+        &self,
+        project_id: &Uuid,
+        name: Option<String>,
+        repos: Option<Vec<RepoConfig>>,
+        ssh_keys: Option<Vec<SshKeyConfig>>,
+    ) -> ServerResult<Project>;
+
+    async fn delete(&self, project_id: &Uuid) -> ServerResult<()>;
+
+    async fn get_repo(&self, project_id: &Uuid, repo_name: &str) -> ServerResult<Option<RepoConfig>>;
+
+    async fn get_ssh_key(&self, project_id: &Uuid, key_name: &str) -> ServerResult<Option<SshKeyConfig>>;
 }
 
 #[async_trait]
@@ -44,6 +85,7 @@ pub trait TaskServiceTrait: Send + Sync {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
+        project_id: Option<Uuid>,
     ) -> Result<Uuid>;
 
     async fn get(&self, task_id: &Uuid) -> ServerResult<Task>;
