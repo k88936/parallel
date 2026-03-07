@@ -47,7 +47,7 @@ impl Worker {
         }
     }
 
-    pub async fn register(&mut self, name: &str) -> Result<()> {
+    pub async fn foo(&mut self, name: &str) -> Result<()> {
         self.name = name.to_string();
 
         if let Some(config) = WorkerConfig::load(&self.work_base)? {
@@ -56,13 +56,13 @@ impl Worker {
         }
 
         if self.token.is_none() {
-            self.do_register().await?;
+            self.register().await?;
         }
 
         Ok(())
     }
 
-    async fn do_register(&mut self) -> Result<()> {
+    async fn register(&mut self) -> Result<()> {
         let capabilities = WorkerCapabilities::default();
         let mut delay = Duration::from_secs(1);
         let max_delay = Duration::from_secs(60);

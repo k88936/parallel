@@ -9,10 +9,18 @@ Parallel is a distributed system for managing AI coding agents that work on git 
 - **Worker(s)**: Long-running daemon processes that poll and execute tasks (Rust)
 - **Web**: Next.js frontend for task management and human interaction ( by now is a demo just for test)
 
+
 ```shell
 # build
 cargo build
 
 ```
+
+
+## Codebase
+* crates/common: common type define
+* crates/message-broker: a tiny websocket-based message-broker
+* crates/server: server proc
+* crates/worker: worker proc
 
 * More detailed instructions (AGENT.md) are under a specific dir's root. *
