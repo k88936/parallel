@@ -30,8 +30,27 @@ impl std::error::Error for AuthError {}
 
 impl MessageBrokerClient {
     pub async fn connect_with_token(url: &str, token: &str) -> std::result::Result<Self, AuthError> {
+        use tokio_tungstenite::tungstenite::handshake::client::generate_key;
+        use tokio_tungstenite::tungstenite::http::Uri;
+
+        let uri: Uri = url.parse()
+            .map_err(|e| AuthError::Other(anyhow::anyhow!("Invalid URL: {}", e)))?;
+
+        let host = uri.host().unwrap_or("localhost");
+        let host_header = if let Some(port) = uri.port_u16() {
+            format!("{}:{}", host, port)
+        } else {
+            host.to_string()
+        };
+
         let request = tokio_tungstenite::tungstenite::http::Request::builder()
+            .method("GET")
             .uri(url)
+            .header("Host", host_header)
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", generate_key())
             .header("Authorization", format!("Bearer {}", token))
             .body(())
             .map_err(|e| AuthError::Other(anyhow::anyhow!("Failed to build request: {}", e)))?;
