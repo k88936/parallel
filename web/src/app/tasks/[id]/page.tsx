@@ -240,7 +240,7 @@ export default function TaskDetailPage() {
                 {task.status === 'completed' && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-6">
                         <p className="text-green-800 font-medium">Task completed successfully!</p>
-                        <p className="text-amber-400 font-bold">{`git fetch && git rebase refs/heads/remotes/origin/${task.target_branch}` } </p>
+                        <p className="text-amber-400 font-bold">{`git fetch && git rebase origin/${task.target_branch}` } </p>
                     </div>
                 )}
 
