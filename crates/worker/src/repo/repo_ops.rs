@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use git2::{
-    Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, ResetType, Signature,
+    Cred, FetchOptions, IndexAddOption, RemoteCallbacks, Repository, Signature,
     build::RepoBuilder,
 };
 use std::path::Path;
