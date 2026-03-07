@@ -64,6 +64,7 @@ export interface CreateTaskRequest {
     target_branch?: string;
     priority?: TaskPriority;
     ssh_key:string;
+    title: string;
     max_execution_time?: number;
 }
 

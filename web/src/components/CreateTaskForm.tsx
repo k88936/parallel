@@ -11,6 +11,7 @@ export function CreateTaskForm() {
         description: "",
         base_branch: 'main',
         priority: 'normal',
+        title: "task",
         ssh_key: sshKey
     });
     const [loading, setLoading] = useState(false);
