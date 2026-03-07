@@ -394,6 +394,7 @@ impl TaskServiceTrait for TaskService {
         let active_statuses = vec![
             TaskStatus::InProgress.as_str(),
             TaskStatus::Claimed.as_str(),
+            TaskStatus::PendingResponse.as_str(),
         ];
 
         let db_tasks = tasks::Entity::find()
