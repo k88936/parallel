@@ -3,7 +3,7 @@ use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
-use parallel_protocol::{WorkerCapabilities, WorkerInfo, WorkerStatus};
+use parallel_domain::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};

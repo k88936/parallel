@@ -13,9 +13,6 @@ Parallel is a distributed system for managing AI coding agents that work on git 
 # build
 cargo build
 
-# unit test (server)
-cargo test --package parallel-server
-
 ```
 
 * More detailed instructions (AGENT.md) are under a specific dir's root. *

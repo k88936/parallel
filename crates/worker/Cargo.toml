@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-parallel-protocol.workspace = true
+parallel-domain.workspace = true
 parallel-message-broker.workspace = true
 
 tokio.workspace = true

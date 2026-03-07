@@ -6,7 +6,7 @@ use axum::{
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
-use parallel_protocol::*;
+use parallel_domain::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
@@ -200,7 +200,7 @@ pub async fn get_task(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
-) -> ApiResult<Json<Task>> {
+) -> ApiResult<Json<TaskDTO>> {
     let correlation_id = request_id
         .header_value()
         .to_str()
@@ -241,7 +241,7 @@ pub async fn cancel_task(
         .ok()
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    let task = state.task_service.get(&task_id).await.map_err(|e| {
+    let task = state.task_service.get_entity(&task_id).await.map_err(|e| {
         tracing::error!(
             correlation_id = ?correlation_id,
             task_id = %task_id,
@@ -256,7 +256,8 @@ pub async fn cancel_task(
             task_id,
             reason: "Cancelled by user".to_string(),
         };
-        if !state.message_broker.send_instruction(&worker_id, instruction) {
+        let json = serde_json::to_string(&instruction).unwrap_or_default();
+        if !state.message_broker.send(&worker_id, json) {
             tracing::warn!(
                 correlation_id = ?correlation_id,
                 task_id = %task_id,
@@ -315,7 +316,7 @@ pub async fn submit_feedback(
         message: payload.message,
     };
 
-    let task = state.task_service.get(&task_id).await.map_err(|e| {
+    let task = state.task_service.get_entity(&task_id).await.map_err(|e| {
         tracing::error!(
             correlation_id = ?correlation_id,
             task_id = %task_id,
@@ -338,7 +339,8 @@ pub async fn submit_feedback(
                 },
             };
 
-            if !state.message_broker.send_instruction(&worker_id, instruction) {
+            let json = serde_json::to_string(&instruction).unwrap_or_default();
+            if !state.message_broker.send(&worker_id, json) {
                 tracing::warn!(
                     correlation_id = ?correlation_id,
                     task_id = %task_id,

@@ -1,5 +1,5 @@
 [package]
-name = "parallel-protocol"
+name = "parallel-domain"
 version.workspace = true
 edition.workspace = true
 

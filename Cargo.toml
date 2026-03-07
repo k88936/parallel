@@ -23,7 +23,7 @@ hostname = "0.4"
 
 [workspace]
 members = [
-    "crates/protocol",
+    "crates/domain",
     "crates/server",
     "crates/worker",
     "crates/message-broker",
@@ -49,7 +49,7 @@ chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
 dashmap = "6.1"
 
-parallel-protocol = { path = "crates/protocol" }
+parallel-domain = { path = "crates/domain" }
 parallel-message-broker = { path = "crates/message-broker" }
 
 axum = { version = "0.7", features = ["ws", "macros"] }

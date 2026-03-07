@@ -3,10 +3,41 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
+use parallel_domain::{ReviewData, TaskAssignment, TaskDTO, TaskPriority, TaskStatus};
 
+use crate::common::types::Task;
 use crate::errors::{ServerError, ServerResult};
 use crate::repository::{TaskRepository, TaskRepositoryTrait};
+
+impl Task {
+    pub fn to_dto(&self) -> TaskDTO {
+        TaskDTO {
+            id: self.id,
+            title: self.title.clone(),
+            repo_url: self.repo_url.clone(),
+            description: self.description.clone(),
+            base_branch: self.base_branch.clone(),
+            target_branch: self.target_branch.clone(),
+            status: self.status,
+            priority: self.priority,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            claimed_by: self.claimed_by,
+        }
+    }
+
+    pub fn to_assignment(&self) -> TaskAssignment {
+        TaskAssignment {
+            id: self.id,
+            repo_url: self.repo_url.clone(),
+            description: self.description.clone(),
+            base_branch: self.base_branch.clone(),
+            target_branch: self.target_branch.clone(),
+            ssh_key: self.ssh_key.clone(),
+        }
+    }
+}
+
 pub struct TaskService {
     repository: Arc<TaskRepository>,
 }
@@ -50,7 +81,12 @@ impl TaskServiceTrait for TaskService {
         Ok(task_id)
     }
 
-    async fn get(&self, task_id: &Uuid) -> ServerResult<Task> {
+    async fn get(&self, task_id: &Uuid) -> ServerResult<TaskDTO> {
+        let task = self.repository.find_by_id(task_id).await?;
+        Ok(task.to_dto())
+    }
+
+    async fn get_entity(&self, task_id: &Uuid) -> ServerResult<Task> {
         self.repository.find_by_id(task_id).await
     }
 
@@ -86,8 +122,10 @@ impl TaskServiceTrait for TaskService {
             None
         };
 
+        let task_dtos: Vec<TaskDTO> = tasks.iter().map(|t| t.to_dto()).collect();
+
         Ok(TaskListResult {
-            tasks,
+            tasks: task_dtos,
             total,
             next_cursor,
             has_more,
@@ -159,7 +197,7 @@ impl TaskServiceTrait for TaskService {
         self.repository.fail(task_id).await
     }
 
-    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task> {
+    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<TaskDTO> {
         let task = self.repository.find_by_id(task_id).await?;
 
         if !matches!(
@@ -181,7 +219,8 @@ impl TaskServiceTrait for TaskService {
             }).await?;
         }
 
-        self.repository.find_by_id(task_id).await
+        let task = self.repository.find_by_id(task_id).await?;
+        Ok(task.to_dto())
     }
 }
 
@@ -202,7 +241,7 @@ pub struct TaskListParams {
 }
 
 pub struct TaskListResult {
-    pub tasks: Vec<Task>,
+    pub tasks: Vec<TaskDTO>,
     pub total: u64,
     pub next_cursor: Option<String>,
     pub has_more: bool,
@@ -223,7 +262,9 @@ pub trait TaskServiceTrait: Send + Sync {
         project_id: Option<Uuid>,
     ) -> Result<Uuid>;
 
-    async fn get(&self, task_id: &Uuid) -> ServerResult<Task>;
+    async fn get(&self, task_id: &Uuid) -> ServerResult<TaskDTO>;
+
+    async fn get_entity(&self, task_id: &Uuid) -> ServerResult<Task>;
 
     async fn list(&self, params: TaskListParams) -> Result<TaskListResult>;
 
@@ -251,5 +292,5 @@ pub trait TaskServiceTrait: Send + Sync {
 
     async fn fail_task(&self, task_id: &Uuid, reason: &str) -> ServerResult<()>;
 
-    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task>;
+    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<TaskDTO>;
 }

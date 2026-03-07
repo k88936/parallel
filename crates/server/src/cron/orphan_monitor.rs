@@ -5,7 +5,7 @@ use tracing::{error, info, warn};
 
 use crate::errors::ServerResult;
 use crate::service::worker_service::WorkerServiceTrait;
-use parallel_protocol::WorkerStatus;
+use parallel_domain::WorkerStatus;
 use crate::service::task_service::TaskServiceTrait;
 
 pub struct OrphanMonitor {

@@ -4,7 +4,7 @@ use tokio::time::interval;
 use tracing::{error, info, warn};
 
 use parallel_message_broker::MessageBroker;
-use parallel_protocol::WorkerInstruction;
+use parallel_domain::WorkerInstruction;
 use crate::service::task_service::TaskServiceTrait;
 use crate::service::worker_service::WorkerServiceTrait;
 
@@ -43,7 +43,7 @@ impl TaskScheduler {
     }
 
     async fn assign_queued_tasks(&self) -> anyhow::Result<()> {
-        let connected_workers = self.message_broker.connected_workers();
+        let connected_workers = self.message_broker.connected_ids();
 
         if connected_workers.is_empty() {
             return Ok(());
@@ -79,8 +79,9 @@ impl TaskScheduler {
                 continue;
             }
 
-            let instruction = WorkerInstruction::AssignTask { task: task.clone() };
-            if !self.message_broker.send_instruction(&worker_id, instruction) {
+            let instruction = WorkerInstruction::AssignTask { task: task.to_assignment() };
+            let json = serde_json::to_string(&instruction)?;
+            if !self.message_broker.send(&worker_id, json) {
                 warn!(
                     worker_id = %worker_id,
                     task_id = %task.id,

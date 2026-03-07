@@ -1932,29 +1932,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "parallel-domain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "parallel-message-broker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "dashmap",
  "futures",
- "parallel-protocol",
- "serde",
- "serde_json",
  "tokio",
- "tokio-stream",
  "tokio-tungstenite 0.26.2",
  "tracing",
- "uuid",
-]
-
-[[package]]
-name = "parallel-protocol"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
  "uuid",
 ]
 
@@ -1969,8 +1965,8 @@ dependencies = [
  "chrono",
  "dashmap",
  "futures",
+ "parallel-domain",
  "parallel-message-broker",
- "parallel-protocol",
  "sea-orm",
  "sea-orm-migration",
  "serde",
@@ -1995,8 +1991,8 @@ dependencies = [
  "futures",
  "git2",
  "nix",
+ "parallel-domain",
  "parallel-message-broker",
- "parallel-protocol",
  "reqwest",
  "serde",
  "serde_json",

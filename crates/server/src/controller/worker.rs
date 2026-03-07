@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
-use parallel_protocol::*;
+use parallel_domain::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
@@ -62,7 +62,7 @@ pub async fn worker_websocket(
         "Worker WebSocket connection initiated"
     );
 
-    state.message_broker.register_worker(worker_id);
+    state.message_broker.register(worker_id);
 
     ws.on_upgrade(move |socket| handle_websocket(socket, state, worker_id, correlation_id))
 }
@@ -73,7 +73,7 @@ async fn handle_websocket(
     worker_id: Uuid,
     correlation_id: Option<Uuid>,
 ) {
-    let mut instruction_rx = match state.message_broker.subscribe_instructions(&worker_id) {
+    let mut instruction_rx = match state.message_broker.subscribe(&worker_id) {
         Some(rx) => rx,
         None => {
             tracing::error!(
@@ -95,9 +95,8 @@ async fn handle_websocket(
         tokio::select! {
             instruction = instruction_rx.recv() => {
                 match instruction {
-                    Ok(instruction) => {
-                        let msg = serde_json::to_string(&*instruction).unwrap_or_default();
-                        if socket.send(Message::Text(msg)).await.is_err() {
+                    Ok(json) => {
+                        if socket.send(Message::Text((*json).clone())).await.is_err() {
                             tracing::warn!(
                                 correlation_id = ?correlation_id,
                                 worker_id = %worker_id,
@@ -177,7 +176,7 @@ async fn handle_websocket(
         }
     }
 
-    state.message_broker.unregister_worker(&worker_id);
+    state.message_broker.unregister(&worker_id);
     tracing::info!(
         correlation_id = ?correlation_id,
         worker_id = %worker_id,

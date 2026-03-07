@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use parallel_protocol::{WorkerCapabilities, WorkerInfo, WorkerStatus};
+use parallel_domain::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::errors::ServerResult;
 use crate::repository::{WorkerRepository, WorkerRepositoryTrait};

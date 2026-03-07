@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use parallel_message_broker::WorkerConnection;
-use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
+use parallel_message_broker::Connection;
+use parallel_domain::{TaskAssignment, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
 
 use crate::config::WorkerConfig;
 use crate::repo::repo_pool::RepoPool;
@@ -135,7 +135,12 @@ impl Worker {
             "Worker starting WebSocket connection"
         );
 
-        let mut connection = WorkerConnection::connect(&self.server_url, &token).await
+        let ws_url = self.server_url
+            .replace("http://", "ws://")
+            .replace("https://", "wss://");
+        let url = format!("{}/api/workers/ws?token={}", ws_url, token);
+
+        let mut connection = Connection::connect(&url).await
             .context("Failed to establish WebSocket connection")?;
 
         info!("WebSocket connected, waiting for instructions");
@@ -165,20 +170,28 @@ impl Worker {
 
         loop {
             tokio::select! {
-                Some(instruction) = connection.recv_instruction() => {
-                    debug!(?instruction, "Received instruction");
-                    Self::handle_instruction(
-                        instruction,
-                        running_tasks.clone(),
-                        repo_pool.clone(),
-                        event_tx.clone(),
-                        worker_id,
-                        self.max_concurrent,
-                    ).await;
+                Some(json) = connection.recv() => {
+                    match serde_json::from_str::<WorkerInstruction>(&json) {
+                        Ok(instruction) => {
+                            debug!(?instruction, "Received instruction");
+                            Self::handle_instruction(
+                                instruction,
+                                running_tasks.clone(),
+                                repo_pool.clone(),
+                                event_tx.clone(),
+                                worker_id,
+                                self.max_concurrent,
+                            ).await;
+                        }
+                        Err(e) => {
+                            warn!(error = %e, json = %json, "Failed to parse instruction");
+                        }
+                    }
                 }
 
                 Some(event) = event_rx.recv() => {
-                    if let Err(e) = connection.send_event(event.clone()).await {
+                    let json = serde_json::to_string(&event)?;
+                    if let Err(e) = connection.send(json).await {
                         error!(error = %e, "Failed to send event");
                     }
                 }
@@ -335,7 +348,7 @@ impl Worker {
     }
 
     async fn execute_task(
-        task: &ProtocolTask,
+        task: &TaskAssignment,
         cancel_token: CancellationToken,
         instruction_rx: mpsc::Receiver<TaskInstruction>,
         event_tx: mpsc::Sender<WorkerEvent>,

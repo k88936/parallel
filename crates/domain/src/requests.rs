@@ -1,10 +1,11 @@
+use crate::TaskStatus;
+use crate::instructions::FeedbackType;
+use crate::instructions::{WorkerEvent, WorkerInstruction};
+use crate::project::{Project, RepoConfig, SshKeyConfig};
+use crate::{TaskDTO, TaskPriority, WorkerCapabilities};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::{
-    Project, RepoConfig, SshKeyConfig, Task, TaskPriority, TaskStatus, WorkerCapabilities,
-};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
@@ -51,7 +52,7 @@ pub struct ListTasksQuery {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskListResponse {
-    pub tasks: Vec<Task>,
+    pub tasks: Vec<TaskDTO>,
     pub total: u64,
     pub next_cursor: Option<String>,
     pub has_more: bool,
@@ -59,7 +60,7 @@ pub struct TaskListResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmitFeedbackRequest {
-    pub feedback_type: super::FeedbackType,
+    pub feedback_type: FeedbackType,
     pub message: String,
 }
 
@@ -115,13 +116,13 @@ pub struct PollRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PollResponse {
-    pub instructions: Vec<super::WorkerInstruction>,
+    pub instructions: Vec<WorkerInstruction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushEventsRequest {
     pub token: String,
-    pub events: Vec<super::WorkerEvent>,
+    pub events: Vec<WorkerEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

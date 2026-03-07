@@ -1,36 +1,27 @@
 use std::sync::Arc;
 use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
-use parallel_protocol::{WorkerEvent, WorkerInstruction};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
-pub struct WorkerConnection {
-    instruction_rx: mpsc::Receiver<WorkerInstruction>,
-    event_tx: mpsc::Sender<WorkerEvent>,
+pub struct Connection {
+    rx: mpsc::Receiver<String>,
+    tx: mpsc::Sender<String>,
     close_tx: mpsc::Sender<()>,
 }
 
-impl WorkerConnection {
-    pub async fn connect(server_url: &str, token: &str) -> Result<Self> {
-        let ws_url = server_url
-            .replace("http://", "ws://")
-            .replace("https://", "wss://");
-        let url = format!("{}/api/workers/ws?token={}", ws_url, token);
-
-        info!(url = %url, "Connecting to server via WebSocket");
-
-        let (ws_stream, _) = connect_async(&url)
+impl Connection {
+    pub async fn connect(url: &str) -> Result<Self> {
+        let (ws_stream, _) = connect_async(url)
             .await
             .context("Failed to connect WebSocket")?;
 
         info!("WebSocket connected");
 
         let (ws_sink, ws_stream) = ws_stream.split();
-
-        let (instruction_tx, instruction_rx) = mpsc::channel::<WorkerInstruction>(64);
-        let (event_tx, mut event_rx) = mpsc::channel::<WorkerEvent>(64);
+        let (tx, rx) = mpsc::channel::<String>(64);
+        let (out_tx, mut out_rx) = mpsc::channel::<String>(64);
         let (close_tx, mut close_rx) = mpsc::channel::<()>(1);
 
         let ws_sink = Arc::new(tokio::sync::Mutex::new(ws_sink));
@@ -41,16 +32,10 @@ impl WorkerConnection {
             while let Some(msg) = ws_stream.next().await {
                 match msg {
                     Ok(WsMessage::Text(text)) => {
-                        match serde_json::from_str::<WorkerInstruction>(&text) {
-                            Ok(instruction) => {
-                                debug!(?instruction, "Received instruction");
-                                if instruction_tx.send(instruction).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                warn!(error = %e, text = %text, "Failed to parse instruction");
-                            }
+                        let text = text.to_string();
+                        debug!("Received message: {}", text);
+                        if tx.send(text).await.is_err() {
+                            break;
                         }
                     }
                     Ok(WsMessage::Ping(data)) => {
@@ -73,10 +58,8 @@ impl WorkerConnection {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(event) = event_rx.recv() => {
-                        let json = serde_json::to_string(&event).unwrap_or_default();
-                        let msg = WsMessage::text(json);
-                        if ws_sink_clone.lock().await.send(msg).await.is_err() {
+                    Some(json) = out_rx.recv() => {
+                        if ws_sink_clone.lock().await.send(WsMessage::text(json)).await.is_err() {
                             break;
                         }
                     }
@@ -90,18 +73,18 @@ impl WorkerConnection {
         });
 
         Ok(Self {
-            instruction_rx,
-            event_tx,
+            rx,
+            tx: out_tx,
             close_tx,
         })
     }
 
-    pub async fn recv_instruction(&mut self) -> Option<WorkerInstruction> {
-        self.instruction_rx.recv().await
+    pub async fn recv(&mut self) -> Option<String> {
+        self.rx.recv().await
     }
 
-    pub async fn send_event(&self, event: WorkerEvent) -> Result<()> {
-        self.event_tx.send(event).await.context("Failed to send event")
+    pub async fn send(&self, json: String) -> Result<()> {
+        self.tx.send(json).await.context("Failed to send")
     }
 
     pub async fn close(&self) {

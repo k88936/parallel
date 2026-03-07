@@ -7,7 +7,7 @@ use axum::{
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
-use parallel_protocol::*;
+use parallel_domain::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
