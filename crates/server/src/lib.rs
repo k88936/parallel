@@ -27,6 +27,7 @@ use db::migration::Migrator;
 use controller::{project, task, worker};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use parallel_message_broker::MessageBroker;
+use repository::{TaskRepository, WorkerRepository, ProjectRepository};
 use service::{
     Coordinator, EventProcessor, ProjectService, TaskService, WorkerService,
     spawn_heartbeat_monitor, spawn_orphan_monitor, spawn_task_scheduler,
@@ -40,11 +41,15 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     info!("Running database migrations...");
     Migrator::up(&db, None).await?;
 
-    let task_service = Arc::new(TaskService::new(db.clone()));
-    let worker_service = Arc::new(WorkerService::new(db.clone()));
-    let project_service = Arc::new(ProjectService::new(db.clone()));
+    let task_repository = Arc::new(TaskRepository::new(db.clone()));
+    let worker_repository = Arc::new(WorkerRepository::new(db.clone()));
+    let project_repository = Arc::new(ProjectRepository::new(db.clone()));
+
+    let task_service = Arc::new(TaskService::new(task_repository.clone()));
+    let worker_service = Arc::new(WorkerService::new(worker_repository.clone()));
+    let project_service = Arc::new(ProjectService::new(project_repository));
     let message_broker = MessageBroker::new();
-    let coordinator = Arc::new(Coordinator::new(db.clone(), message_broker.clone()));
+    let coordinator = Arc::new(Coordinator::new(worker_repository.clone(), message_broker.clone()));
     let event_processor = Arc::new(EventProcessor::new(
         task_service.clone(),
         worker_service.clone(),
