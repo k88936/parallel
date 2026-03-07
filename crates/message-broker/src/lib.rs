@@ -2,4 +2,4 @@ mod server;
 mod client;
 
 pub use server::{MessageBrokerServer, WorkerChannel};
-pub use client::MessageBrokerClient;
+pub use client::{MessageBrokerClient, AuthError};

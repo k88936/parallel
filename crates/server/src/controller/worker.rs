@@ -7,6 +7,7 @@ use axum::{
     },
     Extension,
     response::Response,
+    http::{header::AUTHORIZATION, HeaderMap},
 };
 use serde::Deserialize;
 use tokio::sync::broadcast;
@@ -22,13 +23,23 @@ use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct WsQuery {
-    token: String,
+    token: Option<String>,
+}
+
+fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    let auth_header = headers.get(AUTHORIZATION)?.to_str().ok()?;
+    if auth_header.starts_with("Bearer ") {
+        Some(auth_header[7..].to_string())
+    } else {
+        None
+    }
 }
 
 pub async fn worker_websocket(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Query(query): Query<WsQuery>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
     let correlation_id = request_id
@@ -37,7 +48,11 @@ pub async fn worker_websocket(
         .ok()
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    let worker_info = match state.worker_service.get_by_token(&query.token).await {
+    let token = extract_bearer_token(&headers)
+        .or(query.token)
+        .unwrap_or_default();
+
+    let worker_info = match state.worker_service.get_by_token(&token).await {
         Ok(info) => info,
         Err(e) => {
             tracing::error!(

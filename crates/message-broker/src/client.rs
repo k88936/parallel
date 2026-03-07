@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
+use tokio_tungstenite::{connect_async, tungstenite::{Message as WsMessage, http::StatusCode}};
 use tracing::{debug, error, info};
 
 pub struct MessageBrokerClient {
@@ -11,11 +11,41 @@ pub struct MessageBrokerClient {
     close_tx: mpsc::Sender<()>,
 }
 
+#[derive(Debug)]
+pub enum AuthError {
+    Unauthorized,
+    Other(anyhow::Error),
+}
+
+impl std::fmt::Display for AuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthError::Unauthorized => write!(f, "Unauthorized"),
+            AuthError::Other(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl std::error::Error for AuthError {}
+
 impl MessageBrokerClient {
-    pub async fn connect(url: &str) -> Result<Self> {
-        let (ws_stream, _) = connect_async(url)
+    pub async fn connect_with_token(url: &str, token: &str) -> std::result::Result<Self, AuthError> {
+        let request = tokio_tungstenite::tungstenite::http::Request::builder()
+            .uri(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .body(())
+            .map_err(|e| AuthError::Other(anyhow::anyhow!("Failed to build request: {}", e)))?;
+
+        let (ws_stream, _response) = connect_async(request)
             .await
-            .context("Failed to connect WebSocket")?;
+            .map_err(|e| {
+                if let tokio_tungstenite::tungstenite::Error::Http(resp) = &e {
+                    if resp.status() == StatusCode::UNAUTHORIZED {
+                        return AuthError::Unauthorized;
+                    }
+                }
+                AuthError::Other(anyhow::anyhow!("Failed to connect WebSocket: {}", e))
+            })?;
 
         info!("WebSocket connected");
 

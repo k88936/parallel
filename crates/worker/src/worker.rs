@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use parallel_message_broker::MessageBrokerClient;
+use parallel_message_broker::{MessageBrokerClient, AuthError};
 use parallel_common::{TaskAssignment, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
 
 use crate::config::WorkerConfig;
@@ -125,25 +125,47 @@ impl Worker {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let token = self.token.clone().ok_or_else(|| {
-            anyhow::anyhow!("Worker not registered. Call register() first.")
-        })?;
+        loop {
+            if self.token.is_none() {
+                self.do_register().await?;
+            }
 
-        info!(
-            worker_id = %self.worker_id,
-            max_concurrent = self.max_concurrent,
-            "Worker starting WebSocket connection"
-        );
+            let token = self.token.clone().unwrap();
 
-        let ws_url = self.server_url
-            .replace("http://", "ws://")
-            .replace("https://", "wss://");
-        let url = format!("{}/api/workers/ws?token={}", ws_url, token);
+            info!(
+                worker_id = %self.worker_id,
+                max_concurrent = self.max_concurrent,
+                "Worker starting WebSocket connection"
+            );
 
-        let mut connection = MessageBrokerClient::connect(&url).await
-            .context("Failed to establish WebSocket connection")?;
+            let ws_url = self.server_url
+                .replace("http://", "ws://")
+                .replace("https://", "wss://");
+            let url = format!("{}/api/workers/ws", ws_url);
 
-        info!("WebSocket connected, waiting for instructions");
+            match MessageBrokerClient::connect_with_token(&url, &token).await {
+                Ok(mut connection) => {
+                    info!("WebSocket connected, waiting for instructions");
+
+                    if let Err(e) = self.run_connection_loop(&mut connection).await {
+                        error!(error = %e, "Connection loop error");
+                    }
+                }
+                Err(AuthError::Unauthorized) => {
+                    warn!("Token is invalid or expired, re-registering");
+                    self.token = None;
+                    continue;
+                }
+                Err(AuthError::Other(e)) => {
+                    error!(error = %e, "WebSocket connection failed, retrying in 5s");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            }
+        }
+    }
+
+    async fn run_connection_loop(&mut self, connection: &mut MessageBrokerClient) -> Result<()> {
 
         let (event_tx, mut event_rx) = mpsc::channel::<WorkerEvent>(64);
         let running_tasks = self.running_tasks.clone();
