@@ -64,6 +64,7 @@ pub mod mocks {
             _priority: TaskPriority,
             _ssh_key: String,
             _max_execution_time: i64,
+            project_id: Option<Uuid>,
         ) -> anyhow::Result<Uuid> {
             Ok(Uuid::new_v4())
         }
