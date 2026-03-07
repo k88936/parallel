@@ -196,6 +196,7 @@ impl Worker {
                         )
                         .await;
 
+                        // mutex scope
                         {
                             let mut running = running_tasks.write().await;
                             running.remove(&task_id);
@@ -207,7 +208,7 @@ impl Worker {
                                 let _ = event_tx.send(WorkerEvent::TaskCompleted { task_id }).await;
                             }
                             Err(e) => {
-                                error!("Task {} failed: {}", task_id, e);
+                                error!("Task {} failed: {:#}", task_id, e);
                                 let _ = event_tx
                                     .send(WorkerEvent::TaskFailed {
                                         task_id,
