@@ -24,9 +24,10 @@ use tracing::info;
 use db::migration::Migrator;
 use handlers::{project, task, worker};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
+use parallel_message_broker::MessageBroker;
 use services::{
-    Coordinator, EventProcessor, ProjectService, TaskService, WorkerService, spawn_heartbeat_monitor,
-    spawn_orphan_monitor,
+    Coordinator, EventProcessor, ProjectService, TaskService, WorkerService,
+    spawn_heartbeat_monitor, spawn_orphan_monitor, spawn_task_scheduler,
 };
 use state::AppState;
 
@@ -40,7 +41,8 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     let task_service = Arc::new(TaskService::new(db.clone()));
     let worker_service = Arc::new(WorkerService::new(db.clone()));
     let project_service = Arc::new(ProjectService::new(db.clone()));
-    let coordinator = Arc::new(Coordinator::new(db.clone()));
+    let message_broker = MessageBroker::new();
+    let coordinator = Arc::new(Coordinator::new(db.clone(), message_broker.clone()));
     let event_processor = Arc::new(EventProcessor::new(
         task_service.clone(),
         worker_service.clone(),
@@ -50,8 +52,9 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         task_service.clone(),
         worker_service.clone(),
         project_service,
-        coordinator,
+        coordinator.clone(),
         event_processor,
+        message_broker.clone(),
     );
 
     let heartbeat_timeout: i64 = std::env::var("HEARTBEAT_TIMEOUT_SECONDS")
@@ -69,13 +72,25 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
 
+    let task_scheduler_interval: u64 = std::env::var("TASK_SCHEDULER_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2);
+
     spawn_heartbeat_monitor(
         task_service.clone(),
         worker_service.clone(),
         heartbeat_timeout,
         heartbeat_interval,
     );
-    spawn_orphan_monitor(task_service, worker_service, orphan_check_interval);
+    spawn_orphan_monitor(task_service.clone(), worker_service.clone(), orphan_check_interval);
+    spawn_task_scheduler(
+        task_service,
+        worker_service,
+        coordinator,
+        message_broker,
+        task_scheduler_interval,
+    );
 
     let app = Router::new()
         .route("/api/tasks", post(task::create_task))
@@ -92,8 +107,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/projects/:id", put(project::update_project))
         .route("/api/projects/:id", delete(project::delete_project))
         .route("/api/workers/register", post(worker::register_worker))
-        .route("/api/workers/poll", post(worker::poll_instructions))
-        .route("/api/workers/events", post(worker::push_events))
+        .route("/api/workers/ws", get(worker::worker_websocket))
         .route("/api/workers", get(worker::list_workers))
         .layer(from_fn(add_correlation_header))
         .layer(SetRequestIdLayer::new(

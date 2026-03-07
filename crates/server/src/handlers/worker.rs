@@ -1,8 +1,15 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{
+        State,
+        ws::{WebSocket, WebSocketUpgrade, Message},
+        Query,
+    },
     Extension,
+    response::Response,
 };
+use serde::Deserialize;
+use tokio::sync::broadcast;
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
@@ -12,6 +19,186 @@ use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
 use crate::errors::ServerError;
 use crate::state::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct WsQuery {
+    token: String,
+}
+
+pub async fn worker_websocket(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Query(query): Query<WsQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let worker_info = match state.worker_service.get_by_token(&query.token).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                error = %e,
+                "Invalid token for WebSocket connection"
+            );
+            return Response::builder()
+                .status(401)
+                .body(axum::body::Body::from("Unauthorized"))
+                .unwrap();
+        }
+    };
+
+    let worker_id = worker_info.id;
+    let worker_name = worker_info.name.clone();
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        worker_id = %worker_id,
+        worker_name = %worker_name,
+        "Worker WebSocket connection initiated"
+    );
+
+    state.message_broker.register_worker(worker_id);
+
+    ws.on_upgrade(move |socket| handle_websocket(socket, state, worker_id, correlation_id))
+}
+
+async fn handle_websocket(
+    mut socket: WebSocket,
+    state: AppState,
+    worker_id: Uuid,
+    correlation_id: Option<Uuid>,
+) {
+    let mut instruction_rx = match state.message_broker.subscribe_instructions(&worker_id) {
+        Some(rx) => rx,
+        None => {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                worker_id = %worker_id,
+                "Failed to subscribe to message broker"
+            );
+            return;
+        }
+    };
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        worker_id = %worker_id,
+        "Worker WebSocket connected, streaming instructions"
+    );
+
+    if let Ok(instructions) = state.coordinator.get_pending_instructions(&worker_id).await {
+        if !instructions.is_empty() {
+            for instruction in instructions {
+                let msg = serde_json::to_string(&instruction).unwrap_or_default();
+                if socket.send(Message::Text(msg)).await.is_err() {
+                    tracing::warn!(
+                        correlation_id = ?correlation_id,
+                        worker_id = %worker_id,
+                        "Failed to send pending instruction"
+                    );
+                }
+            }
+        }
+    }
+
+    loop {
+        tokio::select! {
+            instruction = instruction_rx.recv() => {
+                match instruction {
+                    Ok(instruction) => {
+                        let msg = serde_json::to_string(&*instruction).unwrap_or_default();
+                        if socket.send(Message::Text(msg)).await.is_err() {
+                            tracing::warn!(
+                                correlation_id = ?correlation_id,
+                                worker_id = %worker_id,
+                                "Failed to send instruction via WebSocket"
+                            );
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        tracing::info!(
+                            correlation_id = ?correlation_id,
+                            worker_id = %worker_id,
+                            "Instruction channel closed"
+                        );
+                        break;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(
+                            correlation_id = ?correlation_id,
+                            worker_id = %worker_id,
+                            lagged = n,
+                            "Worker WebSocket lagged behind"
+                        );
+                    }
+                }
+            }
+
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        match serde_json::from_str::<WorkerEvent>(&text) {
+                            Ok(event) => {
+                                if let Err(e) = state.event_processor.process_events(&worker_id, vec![event]).await {
+                                    tracing::error!(
+                                        correlation_id = ?correlation_id,
+                                        worker_id = %worker_id,
+                                        error = %e,
+                                        "Failed to process WebSocket event"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    correlation_id = ?correlation_id,
+                                    worker_id = %worker_id,
+                                    error = %e,
+                                    text = %text,
+                                    "Failed to parse WebSocket event"
+                                );
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) => {
+                        tracing::info!(
+                            correlation_id = ?correlation_id,
+                            worker_id = %worker_id,
+                            "Worker WebSocket closed by client"
+                        );
+                        break;
+                    }
+                    Some(Err(e)) => {
+                        tracing::error!(
+                            correlation_id = ?correlation_id,
+                            worker_id = %worker_id,
+                            error = %e,
+                            "WebSocket error"
+                        );
+                        break;
+                    }
+                    None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    state.message_broker.unregister_worker(&worker_id);
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        worker_id = %worker_id,
+        "Worker WebSocket disconnected"
+    );
+}
 
 pub async fn register_worker(
     State(state): State<AppState>,
@@ -53,164 +240,6 @@ pub async fn register_worker(
     );
 
     Ok(Json(worker_info))
-}
-
-pub async fn poll_instructions(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-    Json(payload): Json<PollRequest>,
-) -> ApiResult<Json<PollResponse>> {
-    let correlation_id = request_id
-        .header_value()
-        .to_str()
-        .ok()
-        .and_then(|s| Uuid::parse_str(s).ok());
-
-    let worker_info = state
-        .worker_service
-        .get_by_token(&payload.token)
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                correlation_id = ?correlation_id,
-                error = %e,
-                "Invalid token for poll"
-            );
-            ErrorResponse::from(ServerError::InvalidToken)
-                .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
-
-    let worker_id = worker_info.id;
-
-    let mut instructions = state
-        .coordinator
-        .get_pending_instructions(&worker_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                correlation_id = ?correlation_id,
-                worker_id = %worker_id,
-                error = %e,
-                "Failed to poll instructions"
-            );
-            ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
-                .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
-
-    if !instructions.is_empty() {
-        return Ok(Json(PollResponse { instructions }));
-    }
-
-    let has_slot = match state.worker_service.has_available_slot(&worker_id).await {
-        Ok(has_slot) => has_slot,
-        Err(e) => {
-            tracing::error!(
-                correlation_id = ?correlation_id,
-                worker_id = %worker_id,
-                error = %e,
-                "Failed to check available slot"
-            );
-            return Ok(Json(PollResponse { instructions }));
-        }
-    };
-
-    if !has_slot {
-        return Ok(Json(PollResponse { instructions }));
-    }
-
-    let Some(task) = state.task_service.get_next_queued().await.ok().flatten() else {
-        return Ok(Json(PollResponse { instructions }));
-    };
-
-    if let Err(e) = state.worker_service.add_task(&worker_id, task.id).await {
-        tracing::error!(
-            correlation_id = ?correlation_id,
-            worker_id = %worker_id,
-            task_id = %task.id,
-            error = %e,
-            "Failed to add task to worker"
-        );
-        return Ok(Json(PollResponse { instructions }));
-    }
-
-    if let Err(e) = state
-        .task_service
-        .set_claimed_by(&task.id, Some(worker_id))
-        .await
-    {
-        tracing::error!(
-            correlation_id = ?correlation_id,
-            worker_id = %worker_id,
-            task_id = %task.id,
-            error = %e,
-            "Failed to set claimed_by"
-        );
-        return Ok(Json(PollResponse { instructions }));
-    }
-
-    tracing::info!(
-        correlation_id = ?correlation_id,
-        worker_id = %worker_id,
-        task_id = %task.id,
-        "Task assigned to worker"
-    );
-
-    instructions.push(WorkerInstruction::AssignTask { task });
-
-    Ok(Json(PollResponse { instructions }))
-}
-
-pub async fn push_events(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-    Json(payload): Json<PushEventsRequest>,
-) -> ApiResult<Json<PushEventsResponse>> {
-    let correlation_id = request_id
-        .header_value()
-        .to_str()
-        .ok()
-        .and_then(|s| Uuid::parse_str(s).ok());
-
-    let worker_info = state
-        .worker_service
-        .get_by_token(&payload.token)
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                correlation_id = ?correlation_id,
-                error = %e,
-                "Invalid token for push_events"
-            );
-            ErrorResponse::from(ServerError::InvalidToken)
-                .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
-
-    let worker_id = worker_info.id;
-
-    tracing::debug!(
-        correlation_id = ?correlation_id,
-        worker_id = %worker_id,
-        event_count = payload.events.len(),
-        "Processing worker events"
-    );
-
-    state
-        .event_processor
-        .process_events(&worker_id, payload.events)
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                correlation_id = ?correlation_id,
-                worker_id = %worker_id,
-                error = %e,
-                "Failed to process events"
-            );
-            ErrorResponse::new(ErrorCode::InternalError, "Failed to process events")
-                .with_details(e.to_string())
-                .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
-
-    Ok(Json(PushEventsResponse { acknowledged: true }))
 }
 
 pub async fn list_workers(

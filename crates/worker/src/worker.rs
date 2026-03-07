@@ -3,19 +3,16 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInstruction};
+use parallel_message_broker::WorkerConnection;
+use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
 
-use crate::api_client::APIClient;
 use crate::config::WorkerConfig;
-use crate::repo::repo_ops::GitOps;
 use crate::repo::repo_pool::RepoPool;
-use crate::code::task_runner::TaskRunner;
-
-use crate::code::task_runner::TaskInstruction;
+use crate::code::task_runner::{TaskRunner, TaskInstruction};
 
 struct RunningTask {
     cancel_token: CancellationToken,
@@ -26,7 +23,7 @@ pub struct Worker {
     work_base: PathBuf,
     max_concurrent: usize,
     name: String,
-    api_client: Arc<APIClient>,
+    server_url: String,
     token: Option<String>,
     worker_id: uuid::Uuid,
     running_tasks: Arc<RwLock<HashMap<uuid::Uuid, RunningTask>>>,
@@ -42,7 +39,7 @@ impl Worker {
             work_base: work_base.clone(),
             max_concurrent,
             name: String::new(),
-            api_client: Arc::new(APIClient::new(server_url)),
+            server_url,
             token: None,
             worker_id: uuid::Uuid::nil(),
             running_tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -52,29 +49,17 @@ impl Worker {
 
     pub async fn register(&mut self, name: &str) -> Result<()> {
         self.name = name.to_string();
-        
+
         if let Some(config) = WorkerConfig::load(&self.work_base)? {
-            info!(
-                "Found existing worker config, attempting to use stored token"
-            );
+            info!("Found existing worker config, validating stored token");
             self.token = Some(config.token);
-            
-            match self.api_client.poll_instructions(self.token.clone().unwrap()).await {
-                Ok(_) => {
-                    info!("Stored token is valid");
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!(
-                        error = %e,
-                        "Stored token is invalid, will re-register"
-                    );
-                    self.token = None;
-                }
-            }
         }
 
-        self.do_register().await
+        if self.token.is_none() {
+            self.do_register().await?;
+        }
+
+        Ok(())
     }
 
     async fn do_register(&mut self) -> Result<()> {
@@ -83,23 +68,31 @@ impl Worker {
         let max_delay = Duration::from_secs(60);
 
         loop {
-            match self
-                .api_client
-                .register(self.name.clone(), capabilities.clone(), self.max_concurrent)
+            let url = format!("{}/api/workers/register", self.server_url);
+            let request = RegisterWorkerRequest {
+                name: self.name.clone(),
+                capabilities: capabilities.clone(),
+                max_concurrent: self.max_concurrent,
+            };
+
+            match reqwest::Client::new()
+                .post(&url)
+                .json(&request)
+                .send()
                 .await
             {
-                Ok(worker_info) => {
+                Ok(response) if response.status().is_success() => {
+                    let worker_info = response.json::<WorkerInfo>().await
+                        .context("Failed to parse registration response")?;
+                    
                     self.worker_id = worker_info.id;
                     self.token = Some(worker_info.token.clone());
-                    
+
                     let config = WorkerConfig::new(worker_info.token);
                     if let Err(e) = config.save(&self.work_base) {
-                        warn!(
-                            error = %e,
-                            "Failed to save worker config"
-                        );
+                        warn!(error = %e, "Failed to save worker config");
                     }
-                    
+
                     info!(
                         worker_id = %self.worker_id,
                         worker_name = %self.name,
@@ -107,16 +100,27 @@ impl Worker {
                     );
                     return Ok(());
                 }
+                Ok(response) => {
+                    let status = response.status();
+                    let body = response.text().await.unwrap_or_default();
+                    warn!(
+                        status = %status,
+                        body = %body,
+                        retry_after_secs = delay.as_secs(),
+                        "Registration failed, retrying"
+                    );
+                }
                 Err(e) => {
                     warn!(
                         error = %e,
                         retry_after_secs = delay.as_secs(),
-                        "Failed to register with server, retrying"
+                        "Registration request failed, retrying"
                     );
-                    tokio::time::sleep(delay).await;
-                    delay = std::cmp::min(delay * 2, max_delay);
                 }
             }
+
+            tokio::time::sleep(delay).await;
+            delay = std::cmp::min(delay * 2, max_delay);
         }
     }
 
@@ -128,162 +132,93 @@ impl Worker {
         info!(
             worker_id = %self.worker_id,
             max_concurrent = self.max_concurrent,
-            "Worker starting main loop"
+            "Worker starting WebSocket connection"
         );
 
-        let api_client = self.api_client.clone();
+        let mut connection = WorkerConnection::connect(&self.server_url, &token).await
+            .context("Failed to establish WebSocket connection")?;
+
+        info!("WebSocket connected, waiting for instructions");
+
+        let (event_tx, mut event_rx) = mpsc::channel::<WorkerEvent>(64);
         let running_tasks = self.running_tasks.clone();
-        let work_base = self.work_base.clone();
-        let name = self.name.clone();
-        let max_concurrent = self.max_concurrent;
+        let repo_pool = self.repo_pool.clone();
+        let worker_id = self.worker_id;
 
-        let token = Arc::new(RwLock::new(token));
-        let worker_id = Arc::new(RwLock::new(self.worker_id));
-
-        let (event_tx, mut event_rx) = mpsc::channel(100);
-
-        let token_clone = token.clone();
-        let worker_id_clone = worker_id.clone();
-        let api_client_clone = api_client.clone();
-        let running_tasks_clone = running_tasks.clone();
-        
+        let heartbeat_running_tasks = running_tasks.clone();
+        let event_tx_heartbeat = event_tx.clone();
         tokio::spawn(async move {
-            let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10));
-            let mut pending_events: Vec<WorkerEvent> = Vec::new();
-
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
             loop {
-                tokio::select! {
-                    _ = heartbeat_interval.tick() => {
-                        let tasks = running_tasks_clone.read().await;
-                        let running_task_ids: Vec<uuid::Uuid> = tasks.keys().copied().collect();
-                        drop(tasks);
-
-                        let wid = *worker_id_clone.read().await;
-                        debug!(
-                            worker_id = %wid,
-                            running_task_count = running_task_ids.len(),
-                            "Sending heartbeat"
-                        );
-
-                        pending_events.push(WorkerEvent::Heartbeat {
-                            running_tasks: running_task_ids
-                        });
-                    }
-
-                    Some(event) = event_rx.recv() => {
-                        pending_events.push(event);
-                    }
-                }
-
-                if !pending_events.is_empty() {
-                    let events_to_send = std::mem::take(&mut pending_events);
-                    let current_token = token_clone.read().await.clone();
-
-                    match api_client_clone.push_events(current_token, events_to_send.clone()).await {
-                        Ok(true) => {
-                            pending_events.clear();
-                        }
-                        Ok(false) => {
-                            pending_events = events_to_send;
-                        }
-                        Err(e) => {
-                            if e.to_string().contains("Token invalid") {
-                                warn!("Token invalid during push_events, need to re-register");
-                            }
-                            pending_events = events_to_send;
-                        }
-                    }
+                interval.tick().await;
+                let tasks = heartbeat_running_tasks.read().await;
+                let running_task_ids: Vec<uuid::Uuid> = tasks.keys().copied().collect();
+                drop(tasks);
+                
+                if event_tx_heartbeat.send(WorkerEvent::Heartbeat {
+                    running_tasks: running_task_ids,
+                }).await.is_err() {
+                    break;
                 }
             }
         });
 
-        let mut poll_interval = tokio::time::interval(Duration::from_secs(2));
-
         loop {
             tokio::select! {
-                _ = poll_interval.tick() => {
-                    let current_token = token.read().await.clone();
-                    
-                    match self.api_client.poll_instructions(current_token).await {
-                        Ok(instructions) => {
-                            if !instructions.is_empty() {
-                                let wid = *worker_id.read().await;
-                                debug!(
-                                    worker_id = %wid,
-                                    instruction_count = instructions.len(),
-                                    "Received instructions"
-                                );
-                            }
-                            for instruction in instructions {
-                                self.handle_instruction(instruction, event_tx.clone()).await;
-                            }
-                        }
-                        Err(e) => {
-                            let wid = *worker_id.read().await;
-                            warn!(
-                                worker_id = %wid,
-                                error = %e,
-                                "Failed to poll instructions"
-                            );
-                            
-                            if e.to_string().contains("Token invalid") {
-                                info!("Token invalid, re-registering...");
-                                
-                                let capabilities = WorkerCapabilities::default();
-                                match self.api_client.register(name.clone(), capabilities, max_concurrent).await {
-                                    Ok(worker_info) => {
-                                        *token.write().await = worker_info.token.clone();
-                                        *worker_id.write().await = worker_info.id;
-                                        
-                                        let config = WorkerConfig::new(worker_info.token);
-                                        if let Err(e) = config.save(&work_base) {
-                                            warn!(error = %e, "Failed to save worker config after re-registration");
-                                        }
-                                        
-                                        info!(
-                                            worker_id = %worker_info.id,
-                                            "Re-registered successfully"
-                                        );
-                                    }
-                                    Err(e) => {
-                                        warn!(error = %e, "Failed to re-register");
-                                    }
-                                }
-                            }
-                        }
+                Some(instruction) = connection.recv_instruction() => {
+                    debug!(?instruction, "Received instruction");
+                    Self::handle_instruction(
+                        instruction,
+                        running_tasks.clone(),
+                        repo_pool.clone(),
+                        event_tx.clone(),
+                        worker_id,
+                        self.max_concurrent,
+                    ).await;
+                }
+
+                Some(event) = event_rx.recv() => {
+                    if let Err(e) = connection.send_event(event.clone()).await {
+                        error!(error = %e, "Failed to send event");
                     }
                 }
+
+                else => break,
             }
         }
+
+        Ok(())
     }
 
     async fn handle_instruction(
-        &self,
         instruction: WorkerInstruction,
+        running_tasks: Arc<RwLock<HashMap<uuid::Uuid, RunningTask>>>,
+        repo_pool: Arc<RepoPool>,
         event_tx: mpsc::Sender<WorkerEvent>,
+        worker_id: uuid::Uuid,
+        max_concurrent: usize,
     ) {
         match instruction {
             WorkerInstruction::AssignTask { task } => {
-                let running = self.running_tasks.read().await;
-                if running.len() >= self.max_concurrent {
-                    warn!(
-                        worker_id = %self.worker_id,
-                        task_id = %task.id,
-                        running_count = running.len(),
-                        max_concurrent = self.max_concurrent,
-                        "Max concurrent tasks reached, cannot accept task"
-                    );
-                    return;
+                {
+                    let running = running_tasks.read().await;
+                    if running.len() >= max_concurrent {
+                        warn!(
+                            worker_id = %worker_id,
+                            task_id = %task.id,
+                            running_count = running.len(),
+                            max_concurrent,
+                            "Max concurrent tasks reached"
+                        );
+                        return;
+                    }
                 }
-                drop(running);
 
                 let task_id = task.id;
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
                     repo_url = %task.repo_url,
-                    base_branch = %task.base_branch,
-                    target_branch = %task.target_branch,
                     "Received task assignment"
                 );
 
@@ -295,12 +230,12 @@ impl Worker {
                 };
 
                 {
-                    let mut running = self.running_tasks.write().await;
+                    let mut running = running_tasks.write().await;
                     running.insert(task_id, running_task);
                 }
 
-                let running_tasks = self.running_tasks.clone();
-                let repo_pool = self.repo_pool.clone();
+                let running_tasks_clone = running_tasks.clone();
+                let repo_pool_clone = repo_pool.clone();
 
                 std::thread::spawn(move || {
                     let rt = tokio::runtime::Builder::new_current_thread()
@@ -316,35 +251,25 @@ impl Worker {
                             cancel_token,
                             instruction_rx,
                             event_tx.clone(),
-                            repo_pool,
-                        )
-                        .await;
+                            repo_pool_clone,
+                        ).await;
 
                         {
-                            let mut running = running_tasks.write().await;
+                            let mut running = running_tasks_clone.write().await;
                             running.remove(&task_id);
                         }
 
                         match result {
                             Ok(()) => {
-                                info!(
-                                    task_id = %task_id,
-                                    "Task completed successfully"
-                                );
+                                info!(task_id = %task_id, "Task completed");
                                 let _ = event_tx.send(WorkerEvent::TaskCompleted { task_id }).await;
                             }
                             Err(e) => {
-                                error!(
-                                    task_id = %task_id,
-                                    error = %e,
-                                    "Task failed"
-                                );
-                                let _ = event_tx
-                                    .send(WorkerEvent::TaskFailed {
-                                        task_id,
-                                        error: e.to_string(),
-                                    })
-                                    .await;
+                                error!(task_id = %task_id, error = %e, "Task failed");
+                                let _ = event_tx.send(WorkerEvent::TaskFailed {
+                                    task_id,
+                                    error: e.to_string(),
+                                }).await;
                             }
                         }
                     });
@@ -352,91 +277,58 @@ impl Worker {
             }
             WorkerInstruction::CancelTask { task_id, reason } => {
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
                     reason = %reason,
-                    "Received cancel for task"
+                    "Received cancel request"
                 );
 
-                let running = self.running_tasks.read().await;
+                let running = running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     task.cancel_token.cancel();
-                    info!(
-                        task_id = %task_id,
-                        "Sent cancellation signal to task"
-                    );
-                } else {
-                    warn!(
-                        task_id = %task_id,
-                        "Task not found in running tasks"
-                    );
                 }
             }
-            WorkerInstruction::UpdateTask {
-                task_id,
-                instruction,
-            } => {
+            WorkerInstruction::UpdateTask { task_id, instruction } => {
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
                     instruction = %instruction,
-                    "Received update for task"
+                    "Received update"
                 );
             }
             WorkerInstruction::ApproveIteration { task_id } => {
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
-                    "Received approve for task"
+                    "Received approval"
                 );
-                let running = self.running_tasks.read().await;
+                let running = running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     let _ = task.instruction_tx.send(TaskInstruction::Approve).await;
-                } else {
-                    warn!(
-                        task_id = %task_id,
-                        "Task not found for approval"
-                    );
                 }
             }
             WorkerInstruction::ProvideFeedback { task_id, feedback } => {
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
                     feedback_type = ?feedback.feedback_type,
-                    "Received feedback for task"
+                    "Received feedback"
                 );
-                let running = self.running_tasks.read().await;
+                let running = running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
-                    let _ = task
-                        .instruction_tx
-                        .send(TaskInstruction::Iterate { feedback })
-                        .await;
-                } else {
-                    warn!(
-                        task_id = %task_id,
-                        "Task not found for feedback"
-                    );
+                    let _ = task.instruction_tx.send(TaskInstruction::Iterate { feedback }).await;
                 }
             }
             WorkerInstruction::AbortTask { task_id, reason } => {
                 info!(
-                    worker_id = %self.worker_id,
+                    worker_id = %worker_id,
                     task_id = %task_id,
                     reason = %reason,
-                    "Received abort for task"
+                    "Received abort"
                 );
-                let running = self.running_tasks.read().await;
+                let running = running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
-                    let _ = task
-                        .instruction_tx
-                        .send(TaskInstruction::Abort { reason })
-                        .await;
-                } else {
-                    warn!(
-                        task_id = %task_id,
-                        "Task not found for abort"
-                    );
+                    let _ = task.instruction_tx.send(TaskInstruction::Abort { reason }).await;
                 }
             }
         }
@@ -467,10 +359,7 @@ impl Worker {
             .context("Failed to get task directory")?;
 
         if cancel_token.is_cancelled() {
-            info!(
-                task_id = %task.id,
-                "Task cancelled before execution"
-            );
+            info!(task_id = %task.id, "Task cancelled before execution");
             let _ = repo_pool.release_slot(&task.repo_url, task.id).await;
             return Err(anyhow::anyhow!("Task cancelled before execution"));
         }
@@ -496,12 +385,13 @@ impl Worker {
                 target_branch = %task.target_branch,
                 "Committing and pushing changes"
             );
-            
+
+            use crate::repo::repo_ops::GitOps;
             let git = GitOps::open(&repo_dir)?;
             git.add_all()?;
             git.commit(&format!("Implement: {}", task.description))?;
             git.push(&task.target_branch, &task.ssh_key)?;
-            
+
             info!(
                 task_id = %task.id,
                 target_branch = %task.target_branch,
@@ -510,11 +400,7 @@ impl Worker {
         }
 
         if let Err(e) = repo_pool.release_slot(&task.repo_url, task.id).await {
-            warn!(
-                task_id = %task.id,
-                error = %e,
-                "Failed to release repo slot"
-            );
+            warn!(task_id = %task.id, error = %e, "Failed to release repo slot");
         }
 
         Ok(())
