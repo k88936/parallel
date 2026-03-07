@@ -23,4 +23,4 @@ cargo build
 * crates/server: server proc
 * crates/worker: worker proc
 
-* More detailed instructions (AGENT.md) are under a specific dir's root. *
+* More detailed instructions (AGENT.md) are under a specific dir's root.
