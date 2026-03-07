@@ -1,8 +1,7 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Extension,
 };
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
@@ -53,8 +52,11 @@ pub async fn create_task(
                 .find(|r| &r.name == repo_ref)
                 .map(|r| r.url.clone())
                 .ok_or_else(|| {
-                    ErrorResponse::new(ErrorCode::InternalError, format!("Repo '{}' not found in project", repo_ref))
-                        .with_correlation_id(correlation_id.unwrap_or_default())
+                    ErrorResponse::new(
+                        ErrorCode::InternalError,
+                        format!("Repo '{}' not found in project", repo_ref),
+                    )
+                    .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
         } else if let Some(ref url) = payload.repo_url {
             url.clone()
@@ -73,8 +75,11 @@ pub async fn create_task(
                 .find(|k| &k.name == key_ref)
                 .map(|k| k.key.clone())
                 .ok_or_else(|| {
-                    ErrorResponse::new(ErrorCode::InternalError, format!("SSH key '{}' not found in project", key_ref))
-                        .with_correlation_id(correlation_id.unwrap_or_default())
+                    ErrorResponse::new(
+                        ErrorCode::InternalError,
+                        format!("SSH key '{}' not found in project", key_ref),
+                    )
+                    .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
         } else if let Some(ref key) = payload.ssh_key {
             key.clone()
@@ -89,12 +94,18 @@ pub async fn create_task(
         (repo_url, ssh_key)
     } else {
         let repo_url = payload.repo_url.ok_or_else(|| {
-            ErrorResponse::new(ErrorCode::TaskCreationFailed, "repo_url is required when project_id is not provided")
-                .with_correlation_id(correlation_id.unwrap_or_default())
+            ErrorResponse::new(
+                ErrorCode::TaskCreationFailed,
+                "repo_url is required when project_id is not provided",
+            )
+            .with_correlation_id(correlation_id.unwrap_or_default())
         })?;
         let ssh_key = payload.ssh_key.ok_or_else(|| {
-            ErrorResponse::new(ErrorCode::TaskCreationFailed, "ssh_key is required when project_id is not provided")
-                .with_correlation_id(correlation_id.unwrap_or_default())
+            ErrorResponse::new(
+                ErrorCode::TaskCreationFailed,
+                "ssh_key is required when project_id is not provided",
+            )
+            .with_correlation_id(correlation_id.unwrap_or_default())
         })?;
         (repo_url, ssh_key)
     };
@@ -334,24 +345,19 @@ pub async fn submit_feedback(
                         .with_correlation_id(correlation_id.unwrap_or_default())
                 })?;
 
-            if matches!(
-                feedback.feedback_type,
-                parallel_protocol::FeedbackType::RequestChanges
-            ) {
-                if let Err(e) = state
-                    .task_service
-                    .update_status(&task_id, TaskStatus::PendingRework)
-                    .await
-                {
-                    tracing::error!(
-                        correlation_id = ?correlation_id,
-                        task_id = %task_id,
-                        error = %e,
-                        "Failed to update task status to PendingRework"
-                    );
-                }
+            if let Err(e) = state
+                .task_service
+                .update_status(&task_id, TaskStatus::PendingResponse)
+                .await
+            {
+                tracing::error!(
+                    correlation_id = ?correlation_id,
+                    task_id = %task_id,
+                    error = %e,
+                    "Failed to update task status to PendingRework"
+                );
             }
-
+            
             Ok(StatusCode::NO_CONTENT)
         }
         None => {
@@ -381,16 +387,20 @@ pub async fn get_review_data(
         .ok()
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    let review_data = state.task_service.get_review_data(&task_id).await.map_err(|e| {
-        tracing::error!(
-            correlation_id = ?correlation_id,
-            task_id = %task_id,
-            error = %e,
-            "Failed to get review data for task"
-        );
-        ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
-            .with_correlation_id(correlation_id.unwrap_or_default())
-    })?;
+    let review_data = state
+        .task_service
+        .get_review_data(&task_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                error = %e,
+                "Failed to get review data for task"
+            );
+            ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
 
     Ok(Json(review_data))
 }
@@ -467,11 +477,10 @@ pub async fn retry_task(
             );
 
             let error_response = match e {
-                ServerError::InvalidStatus(msg) => ErrorResponse::new(
-                    ErrorCode::TaskNotRetryable,
-                    msg,
-                )
-                .with_metadata("task_id", serde_json::json!(task_id)),
+                ServerError::InvalidStatus(msg) => {
+                    ErrorResponse::new(ErrorCode::TaskNotRetryable, msg)
+                        .with_metadata("task_id", serde_json::json!(task_id))
+                }
                 ServerError::TaskNotFound(id) => ErrorResponse::new(
                     ErrorCode::TaskNotFound,
                     format!("Task with ID {} not found", id),

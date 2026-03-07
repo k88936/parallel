@@ -377,7 +377,7 @@ impl TaskServiceTrait for TaskService {
             TaskStatus::InProgress.as_str(),
             TaskStatus::Claimed.as_str(),
             TaskStatus::AwaitingReview.as_str(),
-            TaskStatus::PendingRework.as_str(),
+            TaskStatus::PendingResponse.as_str(),
         ];
 
         let db_tasks = tasks::Entity::find()
