@@ -1915,7 +1915,6 @@ dependencies = [
 name = "parallel-protocol"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "serde",
  "serde_json",
