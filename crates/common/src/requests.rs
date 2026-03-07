@@ -2,7 +2,7 @@ use crate::TaskStatus;
 use crate::instructions::FeedbackType;
 use crate::instructions::{WorkerEvent, WorkerInstruction};
 use crate::project::{Project, RepoConfig, SshKeyConfig};
-use crate::{TaskDTO, TaskPriority, WorkerCapabilities};
+use crate::{Task, TaskPriority, WorkerCapabilities};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -52,7 +52,7 @@ pub struct ListTasksQuery {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskListResponse {
-    pub tasks: Vec<TaskDTO>,
+    pub tasks: Vec<Task>,
     pub total: u64,
     pub next_cursor: Option<String>,
     pub has_more: bool,

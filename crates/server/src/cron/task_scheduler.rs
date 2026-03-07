@@ -3,15 +3,15 @@ use std::time::Duration;
 use tokio::time::interval;
 use tracing::{error, info, warn};
 
-use parallel_message_broker::MessageBroker;
-use parallel_domain::WorkerInstruction;
 use crate::service::task_service::TaskServiceTrait;
 use crate::service::worker_service::WorkerServiceTrait;
+use parallel_common::WorkerInstruction;
+use parallel_message_broker::MessageBrokerServer;
 
 pub struct TaskScheduler {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
-    message_broker: MessageBroker,
+    message_broker: MessageBrokerServer,
     check_interval_seconds: u64,
 }
 
@@ -19,7 +19,7 @@ impl TaskScheduler {
     pub fn new(
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
-        message_broker: MessageBroker,
+        message_broker: MessageBrokerServer,
         check_interval_seconds: u64,
     ) -> Self {
         Self {
@@ -58,8 +58,9 @@ impl TaskScheduler {
             let Some(task) = self.task_service.get_next_queued().await? else {
                 break;
             };
+            let task_id = task.id.clone();
 
-            if let Err(e) = self.worker_service.add_task(&worker_id, task.id).await {
+            if let Err(e) = self.worker_service.add_task(&worker_id, &task_id).await {
                 warn!(
                     worker_id = %worker_id,
                     task_id = %task.id,
@@ -69,22 +70,26 @@ impl TaskScheduler {
                 continue;
             }
 
-            if let Err(e) = self.task_service.set_claimed_by(&task.id, Some(worker_id)).await {
+            if let Err(e) = self
+                .task_service
+                .set_claimed_by(&task_id, Some(worker_id))
+                .await
+            {
                 warn!(
                     worker_id = %worker_id,
-                    task_id = %task.id,
+                    task_id = %task_id,
                     error = %e,
                     "Failed to set claimed_by"
                 );
                 continue;
             }
 
-            let instruction = WorkerInstruction::AssignTask { task: task.to_assignment() };
+            let instruction = WorkerInstruction::AssignTask { task };
             let json = serde_json::to_string(&instruction)?;
             if !self.message_broker.send(&worker_id, json) {
                 warn!(
                     worker_id = %worker_id,
-                    task_id = %task.id,
+                    task_id = %task_id,
                     "Failed to send task assignment (worker not connected)"
                 );
                 continue;
@@ -92,7 +97,7 @@ impl TaskScheduler {
 
             info!(
                 worker_id = %worker_id,
-                task_id = %task.id,
+                task_id = %task_id,
                 "Task assigned to worker via scheduler"
             );
         }
@@ -104,7 +109,7 @@ impl TaskScheduler {
 pub fn spawn_task_scheduler(
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
-    message_broker: MessageBroker,
+    message_broker: MessageBrokerServer,
     check_interval_seconds: u64,
 ) {
     let scheduler = TaskScheduler::new(

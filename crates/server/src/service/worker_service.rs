@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use parallel_domain::{WorkerCapabilities, WorkerInfo, WorkerStatus};
+use parallel_common::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::errors::ServerResult;
 use crate::repository::{WorkerRepository, WorkerRepositoryTrait};
@@ -62,7 +62,7 @@ impl WorkerServiceTrait for WorkerService {
         self.repository.update_heartbeat(worker_id, running_tasks, status).await
     }
 
-    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()> {
+    async fn add_task(&self, worker_id: &Uuid, task_id: &Uuid) -> ServerResult<()> {
         self.repository.add_task(worker_id, task_id).await
     }
 
@@ -111,7 +111,7 @@ pub trait WorkerServiceTrait: Send + Sync {
         running_tasks: Vec<Uuid>,
     ) -> ServerResult<()>;
 
-    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()>;
+    async fn add_task(&self, worker_id: &Uuid, task_id: &Uuid) -> ServerResult<()>;
 
     async fn has_available_slot(&self, worker_id: &Uuid) -> ServerResult<bool>;
 

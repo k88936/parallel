@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
-use parallel_domain::*;
+use parallel_common::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;

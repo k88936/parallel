@@ -5,9 +5,9 @@ use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
-use parallel_domain::{ReviewData, TaskPriority, TaskStatus};
+use parallel_common::{ReviewData, TaskPriority, TaskStatus};
 
-use crate::common::types::Task;
+use parallel_common::task::Task;
 use crate::db::entity::tasks;
 use crate::errors::{ServerError, ServerResult};
 

@@ -36,11 +36,11 @@ impl Default for WorkerChannel {
 }
 
 #[derive(Clone)]
-pub struct MessageBroker {
+pub struct MessageBrokerServer {
     channels: Arc<DashMap<Uuid, WorkerChannel>>,
 }
 
-impl MessageBroker {
+impl MessageBrokerServer {
     pub fn new() -> Self {
         Self {
             channels: Arc::new(DashMap::new()),
@@ -86,7 +86,7 @@ impl MessageBroker {
     }
 }
 
-impl Default for MessageBroker {
+impl Default for MessageBrokerServer {
     fn default() -> Self {
         Self::new()
     }

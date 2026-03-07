@@ -3,7 +3,7 @@ use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
-use parallel_domain::{WorkerCapabilities, WorkerInfo, WorkerStatus};
+use parallel_common::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};
@@ -55,7 +55,7 @@ pub trait WorkerRepositoryTrait: Send + Sync {
         status: WorkerStatus,
     ) -> ServerResult<()>;
 
-    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()>;
+    async fn add_task(&self, worker_id: &Uuid, task_id: &Uuid) -> ServerResult<()>;
 
     async fn has_available_slot(&self, worker_id: &Uuid) -> ServerResult<bool>;
 
@@ -63,10 +63,7 @@ pub trait WorkerRepositoryTrait: Send + Sync {
 
     async fn update_status(&self, worker_id: &Uuid, status: WorkerStatus) -> ServerResult<()>;
 
-    async fn find_stale(
-        &self,
-        timeout_seconds: i64,
-    ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>>;
+    async fn find_stale(&self, timeout_seconds: i64) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>>;
 
     async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()>;
 }
@@ -132,10 +129,7 @@ impl WorkerRepositoryTrait for WorkerRepository {
     async fn find_all(&self) -> ServerResult<Vec<WorkerInfo>> {
         let workers = workers::Entity::find().all(&self.db).await?;
 
-        workers
-            .into_iter()
-            .map(model_to_worker_info)
-            .collect()
+        workers.into_iter().map(model_to_worker_info).collect()
     }
 
     async fn update_heartbeat(
@@ -159,13 +153,14 @@ impl WorkerRepositoryTrait for WorkerRepository {
         Ok(())
     }
 
-    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()> {
+    async fn add_task(&self, worker_id: &Uuid, task_id: &Uuid) -> ServerResult<()> {
         let worker = workers::Entity::find_by_id(*worker_id)
             .one(&self.db)
             .await?
             .ok_or_else(|| ServerError::WorkerNotFound(*worker_id))?;
 
-        let mut running_tasks: Vec<Uuid> = serde_json::from_str(&worker.current_tasks_json)?;
+        let running_tasks: Vec<Uuid> = serde_json::from_str(&worker.current_tasks_json)?;
+        let mut running_tasks: Vec<_> = running_tasks.iter().map(AsRef::as_ref).collect();
         running_tasks.push(task_id);
 
         let mut worker: workers::ActiveModel = worker.into();
@@ -208,10 +203,7 @@ impl WorkerRepositoryTrait for WorkerRepository {
         Ok(())
     }
 
-    async fn find_stale(
-        &self,
-        timeout_seconds: i64,
-    ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
+    async fn find_stale(&self, timeout_seconds: i64) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>> {
         let cutoff = Utc::now() - chrono::Duration::seconds(timeout_seconds);
 
         let stale_workers = workers::Entity::find()

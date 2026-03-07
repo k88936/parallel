@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::TaskAssignment;
+use crate::Task;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -57,7 +57,7 @@ pub struct ReviewData {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerInstruction {
     AssignTask {
-        task: TaskAssignment,
+        task: Task,
     },
     CancelTask {
         task_id: Uuid,

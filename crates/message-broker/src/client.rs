@@ -1,17 +1,17 @@
-use std::sync::Arc;
 use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
 use tracing::{debug, error, info};
 
-pub struct Connection {
+pub struct MessageBrokerClient {
     rx: mpsc::Receiver<String>,
     tx: mpsc::Sender<String>,
     close_tx: mpsc::Sender<()>,
 }
 
-impl Connection {
+impl MessageBrokerClient {
     pub async fn connect(url: &str) -> Result<Self> {
         let (ws_stream, _) = connect_async(url)
             .await

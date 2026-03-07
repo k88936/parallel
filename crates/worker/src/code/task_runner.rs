@@ -10,7 +10,7 @@ use agent_client_protocol::{
     Agent, ClientCapabilities as AcpClientCapabilities, ContentBlock, FileSystemCapabilities
 };
 
-use parallel_domain::{HumanFeedback, WorkerEvent};
+use parallel_common::{HumanFeedback, WorkerEvent};
 
 use crate::code::acp_client::ACPClient;
 use crate::repo::repo_ops::GitOps;

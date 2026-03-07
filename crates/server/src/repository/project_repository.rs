@@ -4,7 +4,7 @@ use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
 
-use parallel_domain::{Project, RepoConfig, SshKeyConfig};
+use parallel_common::{Project, RepoConfig, SshKeyConfig};
 
 use crate::db::entity::projects;
 use crate::errors::{ServerError, ServerResult};

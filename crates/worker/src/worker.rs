@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use parallel_message_broker::Connection;
-use parallel_domain::{TaskAssignment, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
+use parallel_message_broker::MessageBrokerClient;
+use parallel_common::{Task, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
 
 use crate::config::WorkerConfig;
 use crate::repo::repo_pool::RepoPool;
@@ -140,7 +140,7 @@ impl Worker {
             .replace("https://", "wss://");
         let url = format!("{}/api/workers/ws?token={}", ws_url, token);
 
-        let mut connection = Connection::connect(&url).await
+        let mut connection = MessageBrokerClient::connect(&url).await
             .context("Failed to establish WebSocket connection")?;
 
         info!("WebSocket connected, waiting for instructions");
@@ -348,7 +348,7 @@ impl Worker {
     }
 
     async fn execute_task(
-        task: &TaskAssignment,
+        task: &Task,
         cancel_token: CancellationToken,
         instruction_rx: mpsc::Receiver<TaskInstruction>,
         event_tx: mpsc::Sender<WorkerEvent>,

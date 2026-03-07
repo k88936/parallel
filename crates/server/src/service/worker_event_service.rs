@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use parallel_domain::{ReviewData, TaskStatus, WorkerEvent};
+use parallel_common::{ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
 use crate::service::task_service::TaskServiceTrait;

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
-use parallel_domain::{AgentMessage, MessageType};
+use parallel_common::{AgentMessage, MessageType};
 
 struct RunningTerminal {
     process: Mutex<tokio::process::Child>,

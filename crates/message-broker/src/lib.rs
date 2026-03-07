@@ -1,5 +1,5 @@
-mod broker;
-mod connection;
+mod server;
+mod client;
 
-pub use broker::{MessageBroker, WorkerChannel};
-pub use connection::Connection;
+pub use server::{MessageBrokerServer, WorkerChannel};
+pub use client::MessageBrokerClient;

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use parallel_domain::{Project, RepoConfig, SshKeyConfig};
+use parallel_common::{Project, RepoConfig, SshKeyConfig};
 
 use crate::errors::ServerResult;
 use crate::repository::{ProjectRepository, ProjectRepositoryTrait};

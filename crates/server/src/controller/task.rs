@@ -6,7 +6,7 @@ use axum::{
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
-use parallel_domain::*;
+use parallel_common::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
@@ -200,7 +200,7 @@ pub async fn get_task(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
-) -> ApiResult<Json<TaskDTO>> {
+) -> ApiResult<Json<Task>> {
     let correlation_id = request_id
         .header_value()
         .to_str()
@@ -361,7 +361,7 @@ pub async fn submit_feedback(
                     "Failed to update task status to PendingRework"
                 );
             }
-            
+
             Ok(StatusCode::NO_CONTENT)
         }
         None => {
