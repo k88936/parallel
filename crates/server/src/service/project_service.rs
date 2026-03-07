@@ -7,8 +7,6 @@ use parallel_protocol::{Project, RepoConfig, SshKeyConfig};
 
 use crate::errors::ServerResult;
 use crate::repository::{ProjectRepository, ProjectRepositoryTrait};
-use crate::service::traits::{ProjectListParams, ProjectListResult, ProjectServiceTrait};
-
 pub struct ProjectService {
     repository: Arc<ProjectRepository>,
 }
@@ -97,4 +95,44 @@ impl ProjectServiceTrait for ProjectService {
         let project = self.repository.find_by_id(project_id).await?;
         Ok(project.ssh_keys.into_iter().find(|k| k.name == key_name))
     }
+}
+
+pub struct ProjectListParams {
+    pub search: Option<String>,
+    pub sort_direction: Option<String>,
+    pub limit: Option<u64>,
+}
+
+pub struct ProjectListResult {
+    pub projects: Vec<Project>,
+    pub total: u64,
+    pub has_more: bool,
+}
+
+#[async_trait]
+pub trait ProjectServiceTrait: Send + Sync {
+    async fn create(
+        &self,
+        name: String,
+        repos: Vec<RepoConfig>,
+        ssh_keys: Vec<SshKeyConfig>,
+    ) -> Result<Uuid>;
+
+    async fn get(&self, project_id: &Uuid) -> ServerResult<Project>;
+
+    async fn list(&self, params: ProjectListParams) -> Result<ProjectListResult>;
+
+    async fn update(
+        &self,
+        project_id: &Uuid,
+        name: Option<String>,
+        repos: Option<Vec<RepoConfig>>,
+        ssh_keys: Option<Vec<SshKeyConfig>>,
+    ) -> ServerResult<Project>;
+
+    async fn delete(&self, project_id: &Uuid) -> ServerResult<()>;
+
+    async fn get_repo(&self, project_id: &Uuid, repo_name: &str) -> ServerResult<Option<RepoConfig>>;
+
+    async fn get_ssh_key(&self, project_id: &Uuid, key_name: &str) -> ServerResult<Option<SshKeyConfig>>;
 }

@@ -69,17 +69,6 @@ pub trait WorkerRepositoryTrait: Send + Sync {
     ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>>;
 
     async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()>;
-
-    async fn update_pending_instructions(
-        &self,
-        worker_id: &Uuid,
-        instructions: Vec<parallel_protocol::WorkerInstruction>,
-    ) -> ServerResult<()>;
-
-    async fn get_pending_instructions(
-        &self,
-        worker_id: &Uuid,
-    ) -> ServerResult<Vec<parallel_protocol::WorkerInstruction>>;
 }
 
 #[async_trait]
@@ -255,34 +244,5 @@ impl WorkerRepositoryTrait for WorkerRepository {
         worker.update(&self.db).await?;
 
         Ok(())
-    }
-
-    async fn update_pending_instructions(
-        &self,
-        worker_id: &Uuid,
-        instructions: Vec<parallel_protocol::WorkerInstruction>,
-    ) -> ServerResult<()> {
-        let worker = workers::Entity::find_by_id(*worker_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| ServerError::WorkerNotFound(*worker_id))?;
-
-        let mut worker: workers::ActiveModel = worker.into();
-        worker.pending_instructions_json = Set(serde_json::to_string(&instructions)?);
-        worker.update(&self.db).await?;
-
-        Ok(())
-    }
-
-    async fn get_pending_instructions(
-        &self,
-        worker_id: &Uuid,
-    ) -> ServerResult<Vec<parallel_protocol::WorkerInstruction>> {
-        let worker = workers::Entity::find_by_id(*worker_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| ServerError::WorkerNotFound(*worker_id))?;
-
-        Ok(serde_json::from_str(&worker.pending_instructions_json)?)
     }
 }

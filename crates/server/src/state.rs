@@ -1,17 +1,16 @@
 use std::sync::Arc;
 
-use crate::service::{
-    CoordinatorTrait, EventProcessorTrait, ProjectServiceTrait, TaskServiceTrait,
-    WorkerServiceTrait,
-};
+use crate::service::worker_event_service::EventProcessorTrait;
 use parallel_message_broker::MessageBroker;
+use crate::service::project_service::ProjectServiceTrait;
+use crate::service::task_service::TaskServiceTrait;
+use crate::service::worker_service::WorkerServiceTrait;
 
 #[derive(Clone)]
 pub struct AppState {
     pub task_service: Arc<dyn TaskServiceTrait>,
     pub worker_service: Arc<dyn WorkerServiceTrait>,
     pub project_service: Arc<dyn ProjectServiceTrait>,
-    pub coordinator: Arc<dyn CoordinatorTrait>,
     pub event_processor: Arc<dyn EventProcessorTrait>,
     pub message_broker: MessageBroker,
 }
@@ -21,7 +20,6 @@ impl AppState {
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
         project_service: Arc<dyn ProjectServiceTrait>,
-        coordinator: Arc<dyn CoordinatorTrait>,
         event_processor: Arc<dyn EventProcessorTrait>,
         message_broker: MessageBroker,
     ) -> Self {
@@ -29,7 +27,6 @@ impl AppState {
             task_service,
             worker_service,
             project_service,
-            coordinator,
             event_processor,
             message_broker,
         }

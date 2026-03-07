@@ -11,7 +11,7 @@ use parallel_protocol::*;
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
 use crate::errors::ServerError;
-use crate::service::traits::TaskListParams;
+use crate::service::task_service::TaskListParams;
 use crate::state::AppState;
 
 pub async fn create_task(
@@ -252,17 +252,16 @@ pub async fn cancel_task(
     })?;
 
     if let Some(worker_id) = task.claimed_by {
-        if let Err(e) = state
-            .coordinator
-            .queue_cancellation(worker_id, task_id, "Cancelled by user".to_string())
-            .await
-        {
+        let instruction = WorkerInstruction::CancelTask {
+            task_id,
+            reason: "Cancelled by user".to_string(),
+        };
+        if !state.message_broker.send_instruction(&worker_id, instruction) {
             tracing::warn!(
                 correlation_id = ?correlation_id,
                 task_id = %task_id,
                 worker_id = %worker_id,
-                error = %e,
-                "Failed to queue cancellation to worker"
+                "Failed to send cancellation to worker (not connected)"
             );
         }
     }
@@ -328,22 +327,25 @@ pub async fn submit_feedback(
 
     match task.claimed_by {
         Some(worker_id) => {
-            state
-                .coordinator
-                .queue_feedback(worker_id, task_id, feedback.clone())
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        correlation_id = ?correlation_id,
-                        task_id = %task_id,
-                        worker_id = %worker_id,
-                        error = %e,
-                        "Failed to submit feedback for task"
-                    );
-                    ErrorResponse::new(ErrorCode::InternalError, "Failed to queue feedback")
-                        .with_details(e.to_string())
-                        .with_correlation_id(correlation_id.unwrap_or_default())
-                })?;
+            let instruction = match feedback.feedback_type {
+                FeedbackType::Approve => WorkerInstruction::ApproveIteration { task_id },
+                FeedbackType::RequestChanges => {
+                    WorkerInstruction::ProvideFeedback { task_id, feedback }
+                }
+                FeedbackType::Abort => WorkerInstruction::AbortTask {
+                    task_id,
+                    reason: feedback.message.clone(),
+                },
+            };
+
+            if !state.message_broker.send_instruction(&worker_id, instruction) {
+                tracing::warn!(
+                    correlation_id = ?correlation_id,
+                    task_id = %task_id,
+                    worker_id = %worker_id,
+                    "Failed to send feedback to worker (not connected)"
+                );
+            }
 
             if let Err(e) = state
                 .task_service

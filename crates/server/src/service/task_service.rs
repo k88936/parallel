@@ -2,13 +2,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
-
+use chrono::{DateTime, Utc};
 use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
 
 use crate::errors::{ServerError, ServerResult};
 use crate::repository::{TaskRepository, TaskRepositoryTrait};
-use crate::service::traits::{TaskListParams, TaskListResult, TaskServiceTrait};
-
 pub struct TaskService {
     repository: Arc<TaskRepository>,
 }
@@ -185,4 +183,73 @@ impl TaskServiceTrait for TaskService {
 
         self.repository.find_by_id(task_id).await
     }
+}
+
+pub struct TaskListParams {
+    pub status: Option<TaskStatus>,
+    pub priority: Option<TaskPriority>,
+    pub repo_url: Option<String>,
+    pub worker_id: Option<Uuid>,
+    pub search: Option<String>,
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
+    pub sort_by: Option<String>,
+    pub sort_direction: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+    pub project_id: Option<Uuid>,
+}
+
+pub struct TaskListResult {
+    pub tasks: Vec<Task>,
+    pub total: u64,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+#[async_trait]
+pub trait TaskServiceTrait: Send + Sync {
+    async fn create(
+        &self,
+        title: String,
+        repo_url: String,
+        description: String,
+        base_branch: String,
+        target_branch: String,
+        priority: TaskPriority,
+        ssh_key: String,
+        max_execution_time: i64,
+        project_id: Option<Uuid>,
+    ) -> Result<Uuid>;
+
+    async fn get(&self, task_id: &Uuid) -> ServerResult<Task>;
+
+    async fn list(&self, params: TaskListParams) -> Result<TaskListResult>;
+
+    async fn count(&self, status: Option<TaskStatus>) -> Result<u64>;
+
+    async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
+
+    async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()>;
+
+    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
+
+    async fn set_review_data(&self, task_id: &Uuid, review_data: ReviewData) -> ServerResult<()>;
+
+    async fn get_review_data(&self, task_id: &Uuid) -> ServerResult<Option<ReviewData>>;
+
+    async fn get_next_queued(&self) -> Result<Option<Task>>;
+
+    async fn requeue_task(&self, task_id: &Uuid) -> ServerResult<()>;
+
+    async fn requeue_tasks(&self, task_ids: &[Uuid]) -> ServerResult<usize>;
+
+    async fn find_orphaned_tasks(&self) -> ServerResult<Vec<Task>>;
+
+    async fn find_timed_out_tasks(&self) -> ServerResult<Vec<Task>>;
+
+    async fn fail_task(&self, task_id: &Uuid, reason: &str) -> ServerResult<()>;
+
+    async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task>;
 }

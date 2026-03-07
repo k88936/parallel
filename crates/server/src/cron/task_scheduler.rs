@@ -5,13 +5,12 @@ use tracing::{error, info, warn};
 
 use parallel_message_broker::MessageBroker;
 use parallel_protocol::WorkerInstruction;
-
-use crate::service::traits::{CoordinatorTrait, TaskServiceTrait, WorkerServiceTrait};
+use crate::service::task_service::TaskServiceTrait;
+use crate::service::worker_service::WorkerServiceTrait;
 
 pub struct TaskScheduler {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
-    coordinator: Arc<dyn CoordinatorTrait>,
     message_broker: MessageBroker,
     check_interval_seconds: u64,
 }
@@ -20,14 +19,12 @@ impl TaskScheduler {
     pub fn new(
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
-        coordinator: Arc<dyn CoordinatorTrait>,
         message_broker: MessageBroker,
         check_interval_seconds: u64,
     ) -> Self {
         Self {
             task_service,
             worker_service,
-            coordinator,
             message_broker,
             check_interval_seconds,
         }
@@ -83,12 +80,11 @@ impl TaskScheduler {
             }
 
             let instruction = WorkerInstruction::AssignTask { task: task.clone() };
-            if let Err(e) = self.coordinator.queue_instruction(worker_id, instruction).await {
+            if !self.message_broker.send_instruction(&worker_id, instruction) {
                 warn!(
                     worker_id = %worker_id,
                     task_id = %task.id,
-                    error = %e,
-                    "Failed to queue task assignment"
+                    "Failed to send task assignment (worker not connected)"
                 );
                 continue;
             }
@@ -107,14 +103,12 @@ impl TaskScheduler {
 pub fn spawn_task_scheduler(
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
-    coordinator: Arc<dyn CoordinatorTrait>,
     message_broker: MessageBroker,
     check_interval_seconds: u64,
 ) {
     let scheduler = TaskScheduler::new(
         task_service,
         worker_service,
-        coordinator,
         message_broker,
         check_interval_seconds,
     );

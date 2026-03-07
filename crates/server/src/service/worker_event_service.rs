@@ -5,7 +5,8 @@ use uuid::Uuid;
 use parallel_protocol::{ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
-use crate::service::traits::{EventProcessorTrait, TaskServiceTrait, WorkerServiceTrait};
+use crate::service::task_service::TaskServiceTrait;
+use crate::service::worker_service::WorkerServiceTrait;
 
 pub struct EventProcessor {
     task_service: Arc<dyn TaskServiceTrait>,
@@ -91,4 +92,9 @@ impl EventProcessorTrait for EventProcessor {
 
         Ok(())
     }
+}
+
+#[async_trait]
+pub trait EventProcessorTrait: Send + Sync {
+    async fn process_events(&self, worker_id: &Uuid, events: Vec<WorkerEvent>) -> ServerResult<()>;
 }

@@ -6,7 +6,6 @@ use parallel_protocol::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::errors::ServerResult;
 use crate::repository::{WorkerRepository, WorkerRepositoryTrait};
-use crate::service::traits::WorkerServiceTrait;
 
 pub struct WorkerService {
     repository: Arc<WorkerRepository>,
@@ -89,4 +88,41 @@ impl WorkerServiceTrait for WorkerService {
     async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()> {
         self.repository.clear_tasks(worker_id).await
     }
+}
+
+#[async_trait]
+pub trait WorkerServiceTrait: Send + Sync {
+    async fn register(
+        &self,
+        name: String,
+        capabilities: WorkerCapabilities,
+        max_concurrent: usize,
+    ) -> ServerResult<WorkerInfo>;
+
+    async fn get(&self, worker_id: &Uuid) -> ServerResult<WorkerInfo>;
+
+    async fn get_by_token(&self, token: &str) -> ServerResult<WorkerInfo>;
+
+    async fn list(&self) -> ServerResult<Vec<WorkerInfo>>;
+
+    async fn update_heartbeat(
+        &self,
+        worker_id: &Uuid,
+        running_tasks: Vec<Uuid>,
+    ) -> ServerResult<()>;
+
+    async fn add_task(&self, worker_id: &Uuid, task_id: Uuid) -> ServerResult<()>;
+
+    async fn has_available_slot(&self, worker_id: &Uuid) -> ServerResult<bool>;
+
+    async fn get_running_tasks(&self, worker_id: &Uuid) -> ServerResult<Vec<Uuid>>;
+
+    async fn update_status(&self, worker_id: &Uuid, status: WorkerStatus) -> ServerResult<()>;
+
+    async fn find_stale_workers(
+        &self,
+        timeout_seconds: i64,
+    ) -> ServerResult<Vec<(Uuid, Vec<Uuid>)>>;
+
+    async fn clear_tasks(&self, worker_id: &Uuid) -> ServerResult<()>;
 }

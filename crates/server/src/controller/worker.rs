@@ -91,21 +91,6 @@ async fn handle_websocket(
         "Worker WebSocket connected, streaming instructions"
     );
 
-    if let Ok(instructions) = state.coordinator.get_pending_instructions(&worker_id).await {
-        if !instructions.is_empty() {
-            for instruction in instructions {
-                let msg = serde_json::to_string(&instruction).unwrap_or_default();
-                if socket.send(Message::Text(msg)).await.is_err() {
-                    tracing::warn!(
-                        correlation_id = ?correlation_id,
-                        worker_id = %worker_id,
-                        "Failed to send pending instruction"
-                    );
-                }
-            }
-        }
-    }
-
     loop {
         tokio::select! {
             instruction = instruction_rx.recv() => {
