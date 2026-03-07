@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use parallel_message_broker::MessageBrokerClient;
-use parallel_common::{Task, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
+use parallel_common::{TaskAssignment, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction, RegisterWorkerRequest};
 
 use crate::config::WorkerConfig;
 use crate::repo::repo_pool::RepoPool;
@@ -348,7 +348,7 @@ impl Worker {
     }
 
     async fn execute_task(
-        task: &Task,
+        task: &TaskAssignment,
         cancel_token: CancellationToken,
         instruction_rx: mpsc::Receiver<TaskInstruction>,
         event_tx: mpsc::Sender<WorkerEvent>,

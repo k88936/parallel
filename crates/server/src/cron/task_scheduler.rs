@@ -5,7 +5,7 @@ use tracing::{error, info, warn};
 
 use crate::service::task_service::TaskServiceTrait;
 use crate::service::worker_service::WorkerServiceTrait;
-use parallel_common::WorkerInstruction;
+use parallel_common::{TaskAssignment, WorkerInstruction};
 use parallel_message_broker::MessageBrokerServer;
 
 pub struct TaskScheduler {
@@ -84,7 +84,16 @@ impl TaskScheduler {
                 continue;
             }
 
-            let instruction = WorkerInstruction::AssignTask { task };
+            let assignment = TaskAssignment {
+                id: task.id,
+                repo_url: task.repo_url,
+                description: task.description,
+                base_branch: task.base_branch,
+                target_branch: task.target_branch,
+                ssh_key: task.ssh_key,
+                max_execution_time: task.max_execution_time,
+            };
+            let instruction = WorkerInstruction::AssignTask { task: assignment };
             let json = serde_json::to_string(&instruction)?;
             if !self.message_broker.send(&worker_id, json) {
                 warn!(

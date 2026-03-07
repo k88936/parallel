@@ -2,8 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::Task;
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum IterationStatus {
@@ -54,10 +52,21 @@ pub struct ReviewData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskAssignment {
+    pub id: Uuid,
+    pub repo_url: String,
+    pub description: String,
+    pub base_branch: String,
+    pub target_branch: String,
+    pub ssh_key: String,
+    pub max_execution_time: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerInstruction {
     AssignTask {
-        task: Task,
+        task: TaskAssignment,
     },
     CancelTask {
         task_id: Uuid,
