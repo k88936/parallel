@@ -4,7 +4,7 @@ use tracing::{Level, info};
 
 fn init_logging() {
     tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive(Level::INFO.into())

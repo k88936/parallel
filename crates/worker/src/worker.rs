@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use parallel_protocol::{Task as ProtocolTask, WorkerCapabilities, WorkerEvent, WorkerInstruction};
 
@@ -56,13 +56,18 @@ impl Worker {
             {
                 Ok(worker_info) => {
                     self.worker_id = worker_info.id;
-                    info!("Worker registered with ID: {}", self.worker_id);
+                    info!(
+                        worker_id = %self.worker_id,
+                        worker_name = %name,
+                        "Worker registered successfully"
+                    );
                     return Ok(());
                 }
                 Err(e) => {
                     warn!(
-                        "Failed to register with server: {}. Retrying in {:?}...",
-                        e, delay
+                        error = %e,
+                        retry_after_secs = delay.as_secs(),
+                        "Failed to register with server, retrying"
                     );
                     tokio::time::sleep(delay).await;
                     delay = std::cmp::min(delay * 2, max_delay);
@@ -76,7 +81,11 @@ impl Worker {
             anyhow::bail!("Worker not registered. Call register() first.");
         }
 
-        info!("Worker {} starting main loop", self.worker_id);
+        info!(
+            worker_id = %self.worker_id,
+            max_concurrent = self.max_concurrent,
+            "Worker starting main loop"
+        );
 
         let worker_id = self.worker_id;
         let api_client = self.api_client.clone();
@@ -94,6 +103,12 @@ impl Worker {
                         let tasks = running_tasks.read().await;
                         let running_task_ids: Vec<uuid::Uuid> = tasks.keys().copied().collect();
                         drop(tasks);
+
+                        debug!(
+                            worker_id = %worker_id,
+                            running_task_count = running_task_ids.len(),
+                            "Sending heartbeat"
+                        );
 
                         pending_events.push(WorkerEvent::Heartbeat {
                             running_tasks: running_task_ids
@@ -130,12 +145,23 @@ impl Worker {
                 _ = poll_interval.tick() => {
                     match self.api_client.poll_instructions(self.worker_id).await {
                         Ok(instructions) => {
+                            if !instructions.is_empty() {
+                                debug!(
+                                    worker_id = %self.worker_id,
+                                    instruction_count = instructions.len(),
+                                    "Received instructions"
+                                );
+                            }
                             for instruction in instructions {
                                 self.handle_instruction(instruction, event_tx.clone()).await;
                             }
                         }
                         Err(e) => {
-                            warn!("Failed to poll instructions: {}", e);
+                            warn!(
+                                worker_id = %self.worker_id,
+                                error = %e,
+                                "Failed to poll instructions"
+                            );
                         }
                     }
                 }
@@ -153,15 +179,25 @@ impl Worker {
                 let running = self.running_tasks.read().await;
                 if running.len() >= self.max_concurrent {
                     warn!(
-                        "Max concurrent tasks reached, cannot accept task {}",
-                        task.id
+                        worker_id = %self.worker_id,
+                        task_id = %task.id,
+                        running_count = running.len(),
+                        max_concurrent = self.max_concurrent,
+                        "Max concurrent tasks reached, cannot accept task"
                     );
                     return;
                 }
                 drop(running);
 
                 let task_id = task.id;
-                info!("Received task assignment: {}", task_id);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    repo_url = %task.repo_url,
+                    base_branch = %task.base_branch,
+                    target_branch = %task.target_branch,
+                    "Received task assignment"
+                );
 
                 let cancel_token = CancellationToken::new();
                 let (instruction_tx, instruction_rx) = mpsc::channel(10);
@@ -196,7 +232,6 @@ impl Worker {
                         )
                         .await;
 
-                        // mutex scope
                         {
                             let mut running = running_tasks.write().await;
                             running.remove(&task_id);
@@ -204,11 +239,18 @@ impl Worker {
 
                         match result {
                             Ok(()) => {
-                                info!("Task {} completed successfully", task_id);
+                                info!(
+                                    task_id = %task_id,
+                                    "Task completed successfully"
+                                );
                                 let _ = event_tx.send(WorkerEvent::TaskCompleted { task_id }).await;
                             }
                             Err(e) => {
-                                error!("Task {} failed: {:#}", task_id, e);
+                                error!(
+                                    task_id = %task_id,
+                                    error = %e,
+                                    "Task failed"
+                                );
                                 let _ = event_tx
                                     .send(WorkerEvent::TaskFailed {
                                         task_id,
@@ -221,33 +263,61 @@ impl Worker {
                 });
             }
             WorkerInstruction::CancelTask { task_id, reason } => {
-                info!("Received cancel for task {}: {}", task_id, reason);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    reason = %reason,
+                    "Received cancel for task"
+                );
 
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     task.cancel_token.cancel();
-                    info!("Sent cancellation signal to task {}", task_id);
+                    info!(
+                        task_id = %task_id,
+                        "Sent cancellation signal to task"
+                    );
                 } else {
-                    warn!("Task {} not found in running tasks", task_id);
+                    warn!(
+                        task_id = %task_id,
+                        "Task not found in running tasks"
+                    );
                 }
             }
             WorkerInstruction::UpdateTask {
                 task_id,
                 instruction,
             } => {
-                info!("Received update for task {}: {}", task_id, instruction);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    instruction = %instruction,
+                    "Received update for task"
+                );
             }
             WorkerInstruction::ApproveIteration { task_id } => {
-                info!("Received approve for task {}", task_id);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    "Received approve for task"
+                );
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     let _ = task.instruction_tx.send(TaskInstruction::Approve).await;
                 } else {
-                    warn!("Task {} not found for approval", task_id);
+                    warn!(
+                        task_id = %task_id,
+                        "Task not found for approval"
+                    );
                 }
             }
             WorkerInstruction::ProvideFeedback { task_id, feedback } => {
-                info!("Received feedback for task {}", task_id);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    feedback_type = ?feedback.feedback_type,
+                    "Received feedback for task"
+                );
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     let _ = task
@@ -255,11 +325,19 @@ impl Worker {
                         .send(TaskInstruction::Iterate { feedback })
                         .await;
                 } else {
-                    warn!("Task {} not found for feedback", task_id);
+                    warn!(
+                        task_id = %task_id,
+                        "Task not found for feedback"
+                    );
                 }
             }
             WorkerInstruction::AbortTask { task_id, reason } => {
-                info!("Received abort for task {}: {}", task_id, reason);
+                info!(
+                    worker_id = %self.worker_id,
+                    task_id = %task_id,
+                    reason = %reason,
+                    "Received abort for task"
+                );
                 let running = self.running_tasks.read().await;
                 if let Some(task) = running.get(&task_id) {
                     let _ = task
@@ -267,7 +345,10 @@ impl Worker {
                         .send(TaskInstruction::Abort { reason })
                         .await;
                 } else {
-                    warn!("Task {} not found for abort", task_id);
+                    warn!(
+                        task_id = %task_id,
+                        "Task not found for abort"
+                    );
                 }
             }
         }
@@ -280,6 +361,12 @@ impl Worker {
         event_tx: mpsc::Sender<WorkerEvent>,
         repo_pool: Arc<RepoPool>,
     ) -> Result<()> {
+        info!(
+            task_id = %task.id,
+            repo_url = %task.repo_url,
+            "Starting task execution"
+        );
+
         let repo_dir = repo_pool
             .acquire_slot(
                 &task.repo_url,
@@ -292,12 +379,22 @@ impl Worker {
             .context("Failed to get task directory")?;
 
         if cancel_token.is_cancelled() {
+            info!(
+                task_id = %task.id,
+                "Task cancelled before execution"
+            );
             let _ = repo_pool.release_slot(&task.repo_url, task.id).await;
             return Err(anyhow::anyhow!("Task cancelled before execution"));
         }
 
         let workdir = std::fs::canonicalize(&repo_dir)
             .context("Failed to resolve absolute path for workdir")?;
+
+        debug!(
+            task_id = %task.id,
+            workdir = ?workdir,
+            "Task workdir prepared"
+        );
 
         let runner = TaskRunner::new(task.id, task.description.clone(), workdir);
 
@@ -306,14 +403,30 @@ impl Worker {
             .await?;
 
         if !cancel_token.is_cancelled() {
+            info!(
+                task_id = %task.id,
+                target_branch = %task.target_branch,
+                "Committing and pushing changes"
+            );
+            
             let git = GitOps::open(&repo_dir)?;
             git.add_all()?;
             git.commit(&format!("Implement: {}", task.description))?;
             git.push(&task.target_branch, &task.ssh_key)?;
+            
+            info!(
+                task_id = %task.id,
+                target_branch = %task.target_branch,
+                "Changes pushed successfully"
+            );
         }
 
         if let Err(e) = repo_pool.release_slot(&task.repo_url, task.id).await {
-            warn!("Failed to release repo slot: {}", e);
+            warn!(
+                task_id = %task.id,
+                error = %e,
+                "Failed to release repo slot"
+            );
         }
 
         Ok(())

@@ -1,5 +1,8 @@
 pub mod db;
 pub mod errors;
+pub mod error_codes;
+pub mod api_error;
+pub mod middleware;
 pub mod handlers;
 pub mod services;
 pub mod state;
@@ -10,14 +13,17 @@ use anyhow::Result;
 use axum::{
     Router,
     routing::{delete, get, post},
+    middleware::from_fn,
 };
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use tower_http::cors::CorsLayer;
+use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
 use db::migration::Migrator;
 use handlers::{task, worker};
+use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use services::{
     Coordinator, EventProcessor, TaskService, WorkerService, spawn_heartbeat_monitor,
     spawn_orphan_monitor,
@@ -81,6 +87,11 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/workers/poll", post(worker::poll_instructions))
         .route("/api/workers/events", post(worker::push_events))
         .route("/api/workers", get(worker::list_workers))
+        .layer(from_fn(add_correlation_header))
+        .layer(SetRequestIdLayer::new(
+            axum::http::header::HeaderName::from_static("x-request-id"),
+            CorrelationIdGenerator,
+        ))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

@@ -2,19 +2,30 @@ use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
 };
+use tower_http::request_id::RequestId;
 use uuid::Uuid;
 
 use parallel_protocol::*;
 
+use crate::api_error::{ApiResult, ErrorResponse};
+use crate::error_codes::ErrorCode;
 use crate::errors::ServerError;
 use crate::services::traits::TaskListParams;
 use crate::state::AppState;
 
 pub async fn create_task(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateTaskRequest>,
-) -> Result<Json<CreateTaskResponse>, StatusCode> {
+) -> ApiResult<Json<CreateTaskResponse>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
     let base_branch = payload.base_branch.unwrap_or_else(|| "main".to_string());
     let target_branch = payload
         .target_branch
@@ -22,7 +33,14 @@ pub async fn create_task(
     let priority = payload.priority.unwrap_or_default();
     let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
-    match state
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        repo_url = %payload.repo_url,
+        title = %payload.title,
+        "Creating task"
+    );
+
+    let task_id = state
         .task_service
         .create(
             payload.title,
@@ -35,19 +53,37 @@ pub async fn create_task(
             max_execution_time,
         )
         .await
-    {
-        Ok(task_id) => Ok(Json(CreateTaskResponse { task_id })),
-        Err(e) => {
-            tracing::error!("Failed to create task: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                error = %e,
+                "Failed to create task"
+            );
+            ErrorResponse::new(ErrorCode::TaskCreationFailed, "Failed to create task")
+                .with_details(e.to_string())
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        "Task created successfully"
+    );
+
+    Ok(Json(CreateTaskResponse { task_id }))
 }
 
 pub async fn list_tasks(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Query(query): Query<ListTasksQuery>,
-) -> Result<Json<TaskListResponse>, StatusCode> {
+) -> ApiResult<Json<TaskListResponse>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
     let params = TaskListParams {
         status: query.status,
         priority: query.priority,
@@ -63,71 +99,137 @@ pub async fn list_tasks(
         offset: query.offset.map(|o| o as u64),
     };
 
-    match state.task_service.list(params).await {
-        Ok(result) => Ok(Json(TaskListResponse {
-            tasks: result.tasks,
-            total: result.total,
-            next_cursor: result.next_cursor,
-            has_more: result.has_more,
-        })),
-        Err(e) => {
-            tracing::error!("Failed to list tasks: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+    let result = state.task_service.list(params).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            error = %e,
+            "Failed to list tasks"
+        );
+        ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
+            .with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(TaskListResponse {
+        tasks: result.tasks,
+        total: result.total,
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+    }))
 }
 
 pub async fn get_task(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
-) -> Result<Json<Task>, StatusCode> {
-    match state.task_service.get(&task_id).await {
-        Ok(task) => Ok(Json(task)),
-        Err(e) => {
-            tracing::error!("Failed to get task: {}", e);
-            Err(StatusCode::NOT_FOUND)
-        }
-    }
+) -> ApiResult<Json<Task>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let task = state.task_service.get(&task_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            task_id = %task_id,
+            error = %e,
+            "Failed to get task"
+        );
+
+        let error_response = match e {
+            ServerError::TaskNotFound(id) => ErrorResponse::new(
+                ErrorCode::TaskNotFound,
+                format!("Task with ID {} not found", id),
+            )
+            .with_metadata("task_id", serde_json::json!(id)),
+            other => ErrorResponse::from(other),
+        };
+
+        error_response.with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(task))
 }
 
 pub async fn cancel_task(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    match state.task_service.get(&task_id).await {
-        Ok(task) => {
-            if let Some(worker_id) = task.claimed_by {
-                let _ = state
-                    .coordinator
-                    .queue_cancellation(worker_id, task_id, "Cancelled by user".to_string())
-                    .await;
-            }
+) -> ApiResult<StatusCode> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
 
-            match state
-                .task_service
-                .update_status(&task_id, TaskStatus::Cancelled)
-                .await
-            {
-                Ok(()) => Ok(StatusCode::NO_CONTENT),
-                Err(e) => {
-                    tracing::error!("Failed to cancel task: {}", e);
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to get task for cancellation: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+    let task = state.task_service.get(&task_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            task_id = %task_id,
+            error = %e,
+            "Failed to get task for cancellation"
+        );
+        ErrorResponse::from(e).with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    if let Some(worker_id) = task.claimed_by {
+        if let Err(e) = state
+            .coordinator
+            .queue_cancellation(worker_id, task_id, "Cancelled by user".to_string())
+            .await
+        {
+            tracing::warn!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                worker_id = %worker_id,
+                error = %e,
+                "Failed to queue cancellation to worker"
+            );
         }
     }
+
+    state
+        .task_service
+        .update_status(&task_id, TaskStatus::Cancelled)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                error = %e,
+                "Failed to cancel task"
+            );
+            ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        "Task cancelled successfully"
+    );
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn submit_feedback(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
     Json(payload): Json<SubmitFeedbackRequest>,
-) -> Result<StatusCode, StatusCode> {
-    tracing::info!("Feedback submitted for task {}", task_id);
+) -> ApiResult<StatusCode> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        feedback_type = ?payload.feedback_type,
+        "Feedback submitted for task"
+    );
 
     let feedback = HumanFeedback {
         provided_at: chrono::Utc::now(),
@@ -135,82 +237,130 @@ pub async fn submit_feedback(
         message: payload.message,
     };
 
-    match state.task_service.get(&task_id).await {
-        Ok(task) => match task.claimed_by {
-            Some(worker_id) => {
-                match state
-                    .coordinator
-                    .queue_feedback(worker_id, task_id, feedback.clone())
+    let task = state.task_service.get(&task_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            task_id = %task_id,
+            error = %e,
+            "Failed to get task for feedback"
+        );
+        ErrorResponse::from(e).with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    match task.claimed_by {
+        Some(worker_id) => {
+            state
+                .coordinator
+                .queue_feedback(worker_id, task_id, feedback.clone())
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        correlation_id = ?correlation_id,
+                        task_id = %task_id,
+                        worker_id = %worker_id,
+                        error = %e,
+                        "Failed to submit feedback for task"
+                    );
+                    ErrorResponse::new(ErrorCode::InternalError, "Failed to queue feedback")
+                        .with_details(e.to_string())
+                        .with_correlation_id(correlation_id.unwrap_or_default())
+                })?;
+
+            if matches!(
+                feedback.feedback_type,
+                parallel_protocol::FeedbackType::RequestChanges
+            ) {
+                if let Err(e) = state
+                    .task_service
+                    .update_status(&task_id, TaskStatus::PendingRework)
                     .await
                 {
-                    Ok(()) => {
-                        if matches!(
-                            feedback.feedback_type,
-                            parallel_protocol::FeedbackType::RequestChanges
-                        ) {
-                            if let Err(e) = state
-                                .task_service
-                                .update_status(&task_id, TaskStatus::PendingRework)
-                                .await
-                            {
-                                tracing::error!(
-                                    "Failed to update task {} status to PendingRework: {}",
-                                    task_id,
-                                    e
-                                );
-                            }
-                        }
-                        Ok(StatusCode::NO_CONTENT)
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to submit feedback for task {}: {}", task_id, e);
-                        Err(StatusCode::INTERNAL_SERVER_ERROR)
-                    }
+                    tracing::error!(
+                        correlation_id = ?correlation_id,
+                        task_id = %task_id,
+                        error = %e,
+                        "Failed to update task status to PendingRework"
+                    );
                 }
             }
-            None => {
-                tracing::warn!("Feedback rejected for unclaimed task {}", task_id);
-                Err(StatusCode::BAD_REQUEST)
-            }
-        },
-        Err(ServerError::TaskNotFound(_)) => Err(StatusCode::NOT_FOUND),
-        Err(e) => {
-            tracing::error!("Failed to get task for feedback: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+
+            Ok(StatusCode::NO_CONTENT)
+        }
+        None => {
+            tracing::warn!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                "Feedback rejected for unclaimed task"
+            );
+            Err(ErrorResponse::new(
+                ErrorCode::FeedbackRejected,
+                "Cannot submit feedback for unclaimed task",
+            )
+            .with_metadata("task_id", serde_json::json!(task_id))
+            .with_correlation_id(correlation_id.unwrap_or_default()))
         }
     }
 }
 
 pub async fn get_review_data(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
-) -> Result<Json<Option<ReviewData>>, StatusCode> {
-    match state.task_service.get_review_data(&task_id).await {
-        Ok(review_data) => Ok(Json(review_data)),
-        Err(e) => {
-            tracing::error!("Failed to get review data for task {}: {}", task_id, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+) -> ApiResult<Json<Option<ReviewData>>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let review_data = state.task_service.get_review_data(&task_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            task_id = %task_id,
+            error = %e,
+            "Failed to get review data for task"
+        );
+        ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
+            .with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(review_data))
 }
 
 pub async fn update_task_status(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Path(task_id): Path<Uuid>,
     Json(payload): Json<UpdateTaskStatusRequest>,
-) -> Result<StatusCode, StatusCode> {
-    match state
+) -> ApiResult<StatusCode> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    state
         .task_service
         .complete_iteration(&task_id, payload.status)
         .await
-    {
-        Ok(()) => {
-            tracing::info!("Task {} status updated to {:?}", task_id, payload.status);
-            Ok(StatusCode::NO_CONTENT)
-        }
-        Err(e) => {
-            tracing::error!("Failed to update task status: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+        .map_err(|e| {
+            tracing::error!(
+                correlation_id = ?correlation_id,
+                task_id = %task_id,
+                status = ?payload.status,
+                error = %e,
+                "Failed to update task status"
+            );
+            ErrorResponse::from(ServerError::DatabaseError(e.to_string()))
+                .with_correlation_id(correlation_id.unwrap_or_default())
+        })?;
+
+    tracing::info!(
+        correlation_id = ?correlation_id,
+        task_id = %task_id,
+        status = ?payload.status,
+        "Task status updated"
+    );
+
+    Ok(StatusCode::NO_CONTENT)
 }
