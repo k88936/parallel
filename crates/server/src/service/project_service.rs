@@ -8,7 +8,7 @@ use parallel_protocol::{Project, RepoConfig, SshKeyConfig};
 
 use crate::db::entity::projects;
 use crate::errors::{ServerError, ServerResult};
-use crate::services::traits::{ProjectListParams, ProjectListResult, ProjectServiceTrait};
+use crate::service::traits::{ProjectListParams, ProjectListResult, ProjectServiceTrait};
 
 pub struct ProjectService {
     db: DatabaseConnection,

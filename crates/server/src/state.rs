@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::services::{
+use crate::service::{
     CoordinatorTrait, EventProcessorTrait, ProjectServiceTrait, TaskServiceTrait,
     WorkerServiceTrait,
 };

@@ -6,7 +6,7 @@ use tracing::{error, info, warn};
 use parallel_message_broker::MessageBroker;
 use parallel_protocol::WorkerInstruction;
 
-use crate::services::traits::{CoordinatorTrait, TaskServiceTrait, WorkerServiceTrait};
+use crate::service::traits::{CoordinatorTrait, TaskServiceTrait, WorkerServiceTrait};
 
 pub struct TaskScheduler {
     task_service: Arc<dyn TaskServiceTrait>,

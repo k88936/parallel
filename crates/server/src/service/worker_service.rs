@@ -7,7 +7,7 @@ use parallel_protocol::{WorkerCapabilities, WorkerInfo, WorkerStatus};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};
-use crate::services::traits::WorkerServiceTrait;
+use crate::service::traits::WorkerServiceTrait;
 
 pub struct WorkerService {
     db: DatabaseConnection,

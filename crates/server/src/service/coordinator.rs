@@ -7,7 +7,7 @@ use parallel_protocol::{FeedbackType, HumanFeedback, WorkerInstruction};
 
 use crate::db::entity::workers;
 use crate::errors::{ServerError, ServerResult};
-use crate::services::traits::CoordinatorTrait;
+use crate::service::traits::CoordinatorTrait;
 
 pub struct Coordinator {
     db: DatabaseConnection,

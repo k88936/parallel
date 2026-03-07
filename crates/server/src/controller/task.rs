@@ -11,7 +11,7 @@ use parallel_protocol::*;
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
 use crate::errors::ServerError;
-use crate::services::traits::TaskListParams;
+use crate::service::traits::TaskListParams;
 use crate::state::AppState;
 
 pub async fn create_task(

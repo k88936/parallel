@@ -4,7 +4,7 @@ use tokio::time::interval;
 use tracing::{error, info, warn};
 
 use crate::errors::ServerResult;
-use crate::services::{TaskServiceTrait, WorkerServiceTrait};
+use crate::service::{TaskServiceTrait, WorkerServiceTrait};
 use parallel_protocol::WorkerStatus;
 
 pub struct HeartbeatMonitor {

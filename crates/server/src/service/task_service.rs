@@ -9,7 +9,7 @@ use parallel_protocol::{ReviewData, Task, TaskPriority, TaskStatus};
 
 use crate::db::entity::tasks;
 use crate::errors::{ServerError, ServerResult};
-use crate::services::traits::{TaskListParams, TaskListResult, TaskServiceTrait};
+use crate::service::traits::{TaskListParams, TaskListResult, TaskServiceTrait};
 
 pub struct TaskService {
     db: DatabaseConnection,

@@ -12,7 +12,7 @@ use parallel_protocol::*;
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
 use crate::errors::ServerError;
-use crate::services::traits::ProjectListParams;
+use crate::service::traits::ProjectListParams;
 use crate::state::AppState;
 
 pub async fn create_project(

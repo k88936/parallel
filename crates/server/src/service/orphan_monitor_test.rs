@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::services::orphan_monitor::OrphanMonitor;
-    use crate::services::test_utils::mocks::{
+    use crate::service::orphan_monitor::OrphanMonitor;
+    use crate::service::test_utils::mocks::{
         create_test_task, create_test_worker, MockTaskService, MockWorkerService,
     };
     use parallel_protocol::WorkerStatus;

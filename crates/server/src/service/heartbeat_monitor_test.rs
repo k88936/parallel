@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::services::heartbeat_monitor::HeartbeatMonitor;
-    use crate::services::test_utils::mocks::{MockTaskService, MockWorkerService};
+    use crate::service::heartbeat_monitor::HeartbeatMonitor;
+    use crate::service::test_utils::mocks::{MockTaskService, MockWorkerService};
     use parallel_protocol::WorkerStatus;
     use std::sync::Arc;
     use uuid::Uuid;

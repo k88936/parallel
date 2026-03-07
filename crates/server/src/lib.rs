@@ -3,8 +3,8 @@ pub mod errors;
 pub mod error_codes;
 pub mod api_error;
 pub mod middleware;
-pub mod handlers;
-pub mod services;
+pub mod controller;
+pub mod service;
 pub mod state;
 
 use std::sync::Arc;
@@ -22,10 +22,10 @@ use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
 use db::migration::Migrator;
-use handlers::{project, task, worker};
+use controller::{project, task, worker};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use parallel_message_broker::MessageBroker;
-use services::{
+use service::{
     Coordinator, EventProcessor, ProjectService, TaskService, WorkerService,
     spawn_heartbeat_monitor, spawn_orphan_monitor, spawn_task_scheduler,
 };

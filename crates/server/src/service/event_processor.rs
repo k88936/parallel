@@ -5,7 +5,7 @@ use uuid::Uuid;
 use parallel_protocol::{ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
-use crate::services::traits::{EventProcessorTrait, TaskServiceTrait, WorkerServiceTrait};
+use crate::service::traits::{EventProcessorTrait, TaskServiceTrait, WorkerServiceTrait};
 
 pub struct EventProcessor {
     task_service: Arc<dyn TaskServiceTrait>,

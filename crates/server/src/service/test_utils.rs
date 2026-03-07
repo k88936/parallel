@@ -1,8 +1,8 @@
 #[cfg(test)]
 pub mod mocks {
     use crate::errors::{ServerError, ServerResult};
-    use crate::services::traits::{TaskListParams, TaskListResult};
-    use crate::services::{TaskServiceTrait, WorkerServiceTrait};
+    use crate::service::traits::{TaskListParams, TaskListResult};
+    use crate::service::{TaskServiceTrait, WorkerServiceTrait};
     use async_trait::async_trait;
     use chrono::Utc;
     use parallel_protocol::{
