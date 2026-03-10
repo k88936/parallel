@@ -9,6 +9,7 @@ use axum::{
     response::Response,
     http::{header::AUTHORIZATION, HeaderMap},
 };
+use axum::extract::ws::Utf8Bytes;
 use serde::Deserialize;
 use tokio::sync::broadcast;
 use tower_http::request_id::RequestId;
@@ -111,7 +112,7 @@ async fn handle_websocket(
             instruction = instruction_rx.recv() => {
                 match instruction {
                     Ok(json) => {
-                        if socket.send(Message::Text((*json).clone())).await.is_err() {
+                        if socket.send(Message::Text(Utf8Bytes::from((*json).clone()))).await.is_err() {
                             tracing::warn!(
                                 correlation_id = ?correlation_id,
                                 worker_id = %worker_id,

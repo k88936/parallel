@@ -2,26 +2,27 @@ mod actors;
 mod code;
 mod config;
 mod repo;
+mod test;
 pub mod utils;
 
 use crate::actors::manager::{GetRunningTaskIds, HandleInstruction};
 use crate::actors::{ManagerActor, RepoPoolActor};
 use anyhow::{Context, Error};
+use axum::{Json, Router, http::StatusCode, routing::get};
 pub use config::{AcpConfig, WorkerConfig};
 use parallel_common::{
     RegisterWorkerRequest, ResourceMonitor, WorkerCapabilities, WorkerEvent, WorkerInfo,
     WorkerInstruction,
 };
 use parallel_message_broker::{AuthError, MessageBrokerClient};
+use serde_json::json;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 use sysinfo::System;
 use tokio::sync::mpsc::{Receiver, Sender};
-use xtra::{Address, Mailbox};
-use axum::{Router, routing::get, http::StatusCode, Json};
-use serde_json::json;
 use tower_http::cors::CorsLayer;
+use xtra::{Address, Mailbox};
 
 pub struct Config {
     pub work_base: PathBuf,
@@ -68,7 +69,9 @@ impl App {
         Self { config, acp_config }
     }
     pub async fn run(&self) {
-        let health_addr: SocketAddr = format!("0.0.0.0:{}", self.config.health_port).parse().unwrap();
+        let health_addr: SocketAddr = format!("0.0.0.0:{}", self.config.health_port)
+            .parse()
+            .unwrap();
         let health_app = Router::new()
             .route("/health", get(health_check))
             .layer(CorsLayer::permissive());
@@ -96,7 +99,9 @@ impl App {
             (manager_addr.clone(), manager_mailbox),
         );
 
-        self.connect(manager_addr.clone(), event_tx, event_rx).await.unwrap();
+        self.connect(manager_addr.clone(), event_tx, event_rx)
+            .await
+            .unwrap();
     }
     async fn connect(
         &self,
@@ -245,23 +250,25 @@ impl App {
                         running_tasks: running_task_ids,
                     };
                     let _ = event_tx.send(event).await;
-                    
+
                     let resources = Self::collect_resources(&mut sys);
-                    let _ = event_tx.send(WorkerEvent::ResourceMonitor { resources }).await;
+                    let _ = event_tx
+                        .send(WorkerEvent::ResourceMonitor { resources })
+                        .await;
                 }
                 Err(_) => break,
             }
         }
     }
-    
+
     fn collect_resources(sys: &mut System) -> ResourceMonitor {
         use sysinfo::Disks;
-        
+
         sys.refresh_cpu_all();
         sys.refresh_memory();
-        
+
         let cpu_usage = sys.global_cpu_usage();
-        
+
         let total_memory = sys.total_memory();
         let used_memory = sys.used_memory();
         let memory_percent = if total_memory > 0 {
@@ -269,17 +276,20 @@ impl App {
         } else {
             0.0
         };
-        
+
         let disks = Disks::new_with_refreshed_list();
         let (disk_total, disk_used) = disks.iter().fold((0u64, 0u64), |(total, used), disk| {
-            (total + disk.total_space(), used + (disk.total_space() - disk.available_space()))
+            (
+                total + disk.total_space(),
+                used + (disk.total_space() - disk.available_space()),
+            )
         });
         let disk_percent = if disk_total > 0 {
             (disk_used as f64 / disk_total as f64) * 100.0
         } else {
             0.0
         };
-        
+
         ResourceMonitor {
             cpu_usage_percent: cpu_usage,
             memory_usage_percent: memory_percent as f32,
