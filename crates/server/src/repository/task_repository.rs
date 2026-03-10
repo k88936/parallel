@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::Utc;
 use sea_orm::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use parallel_common::{ReviewData, TaskPriority, TaskStatus};
@@ -36,6 +37,7 @@ fn model_to_task(t: tasks::Model) -> Task {
         claimed_by: t.claimed_by,
         ssh_key: t.ssh_key,
         max_execution_time: t.max_execution_time,
+        required_labels: serde_json::from_str(&t.required_labels_json).unwrap_or_default(),
     }
 }
 
@@ -70,6 +72,7 @@ pub trait TaskRepositoryTrait: Send + Sync {
         ssh_key: String,
         max_execution_time: i64,
         project_id: Option<Uuid>,
+        required_labels: HashMap<String, String>,
     ) -> Result<()>;
 
     async fn find_by_id(&self, task_id: &Uuid) -> ServerResult<Task>;
@@ -128,6 +131,7 @@ impl TaskRepositoryTrait for TaskRepository {
         ssh_key: String,
         max_execution_time: i64,
         project_id: Option<Uuid>,
+        required_labels: HashMap<String, String>,
     ) -> Result<()> {
         let now = Utc::now();
 
@@ -147,6 +151,7 @@ impl TaskRepositoryTrait for TaskRepository {
             ssh_key: Set(ssh_key),
             max_execution_time: Set(max_execution_time),
             project_id: Set(project_id),
+            required_labels_json: Set(serde_json::to_string(&required_labels)?),
         };
 
         tasks::Entity::insert(task).exec(&self.db).await?;

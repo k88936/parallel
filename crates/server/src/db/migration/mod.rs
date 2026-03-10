@@ -10,6 +10,7 @@ mod m20240309_000007_add_title_to_tasks;
 mod m20240310_000008_add_token_to_workers;
 mod m20240311_000009_create_projects;
 mod m20240311_000010_add_project_id_to_tasks;
+mod m20240312_000011_add_required_labels_to_tasks;
 
 pub struct Migrator;
 
@@ -27,6 +28,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240310_000008_add_token_to_workers::Migration),
             Box::new(m20240311_000009_create_projects::Migration),
             Box::new(m20240311_000010_add_project_id_to_tasks::Migration),
+            Box::new(m20240312_000011_add_required_labels_to_tasks::Migration),
         ]
     }
 }

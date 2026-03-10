@@ -1,6 +1,7 @@
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -78,7 +79,7 @@ impl Default for TaskPriority {
     }
 }
 
-#[derive(Debug, Clone,Serialize,Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: Uuid,
     pub title: String,
@@ -93,4 +94,6 @@ pub struct Task {
     pub claimed_by: Option<Uuid>,
     pub ssh_key: String,
     pub max_execution_time: i64,
+    #[serde(default)]
+    pub required_labels: HashMap<String, String>,
 }

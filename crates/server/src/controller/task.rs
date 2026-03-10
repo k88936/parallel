@@ -129,6 +129,7 @@ pub async fn create_task(
             ssh_key,
             max_execution_time,
             payload.project_id,
+            payload.required_labels,
         )
         .await
         .map_err(|e| {

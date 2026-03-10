@@ -20,6 +20,7 @@ pub struct Model {
     pub ssh_key: String,
     pub max_execution_time: i64,
     pub project_id: Option<Uuid>,
+    pub required_labels_json: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

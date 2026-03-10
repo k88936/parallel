@@ -1,10 +1,11 @@
-use crate::TaskStatus;
 use crate::instructions::FeedbackType;
 use crate::instructions::{WorkerEvent, WorkerInstruction};
 use crate::project::{Project, RepoConfig, SshKeyConfig};
+use crate::TaskStatus;
 use crate::{Task, TaskPriority, WorkerCapabilities};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +21,8 @@ pub struct CreateTaskRequest {
     pub ssh_key_ref: Option<String>,
     pub max_execution_time: Option<i64>,
     pub project_id: Option<Uuid>,
+    #[serde(default)]
+    pub required_labels: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

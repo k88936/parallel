@@ -42,6 +42,16 @@ impl TaskScheduler {
         }
     }
 
+    fn labels_match(worker_labels: &std::collections::HashMap<String, String>, required_labels: &std::collections::HashMap<String, String>) -> bool {
+        if required_labels.is_empty() {
+            return true;
+        }
+        
+        required_labels.iter().all(|(key, value)| {
+            worker_labels.get(key).map(|v| v == value).unwrap_or(false)
+        })
+    }
+
     async fn assign_queued_tasks(&self) -> anyhow::Result<()> {
         let connected_workers = self.message_broker.connected_ids();
 
@@ -55,10 +65,24 @@ impl TaskScheduler {
                 continue;
             }
 
+            let worker_info = self.worker_service.get(&worker_id).await?;
+            let worker_labels = &worker_info.capabilities.labels;
+
             let Some(task) = self.task_service.get_next_queued().await? else {
                 break;
             };
             let task_id = task.id.clone();
+
+            if !Self::labels_match(worker_labels, &task.required_labels) {
+                info!(
+                    worker_id = %worker_id,
+                    task_id = %task_id,
+                    required_labels = ?task.required_labels,
+                    worker_labels = ?worker_labels,
+                    "Worker labels do not match task requirements, skipping"
+                );
+                continue;
+            }
 
             if let Err(e) = self.worker_service.add_task(&worker_id, &task_id).await {
                 warn!(

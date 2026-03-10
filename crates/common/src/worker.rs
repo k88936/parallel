@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -37,6 +38,8 @@ pub struct WorkerCapabilities {
     pub has_git: bool,
     pub available_agents: Vec<String>,
     pub supported_languages: Vec<String>,
+    #[serde(default)]
+    pub labels: HashMap<String, String>,
 }
 
 impl Default for WorkerCapabilities {
@@ -49,6 +52,7 @@ impl Default for WorkerCapabilities {
                 "python".to_string(),
                 "javascript".to_string(),
             ],
+            labels: HashMap::new(),
         }
     }
 }

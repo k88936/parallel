@@ -4,6 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parallel_common::{ReviewData, Task, TaskPriority, TaskStatus};
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -30,6 +31,7 @@ impl TaskServiceTrait for TaskService {
         ssh_key: String,
         max_execution_time: i64,
         project_id: Option<Uuid>,
+        required_labels: HashMap<String, String>,
     ) -> Result<Uuid> {
         let task_id = Uuid::new_v4();
 
@@ -46,6 +48,7 @@ impl TaskServiceTrait for TaskService {
                 ssh_key,
                 max_execution_time,
                 project_id,
+                required_labels,
             )
             .await?;
 
@@ -240,6 +243,7 @@ pub trait TaskServiceTrait: Send + Sync {
         ssh_key: String,
         max_execution_time: i64,
         project_id: Option<Uuid>,
+        required_labels: HashMap<String, String>,
     ) -> Result<Uuid>;
 
     async fn get(&self, task_id: &Uuid) -> ServerResult<Task>;
