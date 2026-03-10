@@ -12,6 +12,27 @@ impl acp::Client for MockedACPClient {
         Err(acp::Error::method_not_found())
     }
 
+    async fn session_notification(
+        &self,
+        args: acp::SessionNotification,
+    ) -> acp::Result<(), acp::Error> {
+        match args.update {
+            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk { content, .. }) => {
+                let text = match content {
+                    acp::ContentBlock::Text(text_content) => text_content.text,
+                    acp::ContentBlock::Image(_) => "<image>".into(),
+                    acp::ContentBlock::Audio(_) => "<audio>".into(),
+                    acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
+                    acp::ContentBlock::Resource(_) => "<resource>".into(),
+                    _ => "<unknown>".into(),
+                };
+                println!("| Agent: {text}");
+            }
+            _ => {} // Handle future variants gracefully
+        }
+        Ok(())
+    }
+
     async fn write_text_file(
         &self,
         _args: acp::WriteTextFileRequest,
@@ -59,27 +80,6 @@ impl acp::Client for MockedACPClient {
         _args: KillTerminalRequest,
     ) -> agent_client_protocol::Result<KillTerminalResponse> {
         Err(acp::Error::method_not_found())
-    }
-
-    async fn session_notification(
-        &self,
-        args: acp::SessionNotification,
-    ) -> acp::Result<(), acp::Error> {
-        match args.update {
-            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk { content, .. }) => {
-                let text = match content {
-                    acp::ContentBlock::Text(text_content) => text_content.text,
-                    acp::ContentBlock::Image(_) => "<image>".into(),
-                    acp::ContentBlock::Audio(_) => "<audio>".into(),
-                    acp::ContentBlock::ResourceLink(resource_link) => resource_link.uri,
-                    acp::ContentBlock::Resource(_) => "<resource>".into(),
-                    _ => "<unknown>".into(),
-                };
-                println!("| Agent: {text}");
-            }
-            _ => {} // Handle future variants gracefully
-        }
-        Ok(())
     }
 
     async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {

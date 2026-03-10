@@ -117,6 +117,7 @@ impl App {
                 "python".to_string(),
                 "javascript".to_string(),
             ],
+            labels: Default::default(),
         };
 
         let mut token = None;

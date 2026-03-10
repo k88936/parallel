@@ -2,6 +2,7 @@ use axum::{
     extract::{State, ws::{WebSocket, WebSocketUpgrade, Message}},
     response::Response,
 };
+use axum::extract::ws::Utf8Bytes;
 use tracing::{error, info, warn};
 
 use crate::state::AppState;
@@ -31,7 +32,7 @@ async fn handle_alert_websocket(mut socket: WebSocket, state: AppState) {
                             }
                         };
 
-                        if socket.send(Message::Text(json)).await.is_err() {
+                        if socket.send(Message::Text(Utf8Bytes::from(json))).await.is_err() {
                             warn!("Failed to send alert via WebSocket");
                             break;
                         }
