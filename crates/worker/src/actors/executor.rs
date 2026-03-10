@@ -15,6 +15,7 @@ use parallel_common::{HumanFeedback, TaskAssignment, WorkerEvent};
 use crate::code::acp_client::ACPClient;
 use crate::repo::repo_ops::GitOps;
 use crate::actors::{RepoPoolActor, AcquireSlot, ReleaseSlot, TaskCompleted, ManagerActor};
+use crate::AcpConfig;
 
 #[derive(Debug, Clone)]
 pub enum TaskInstruction {
@@ -31,6 +32,7 @@ pub struct ExecutorActor {
     repo_pool: Address<RepoPoolActor>,
     event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
     worker: Address<ManagerActor>,
+    acp_config: AcpConfig,
 }
 
 impl ExecutorActor {
@@ -39,6 +41,7 @@ impl ExecutorActor {
         repo_pool: Address<RepoPoolActor>,
         event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
         worker: Address<ManagerActor>,
+        acp_config: AcpConfig,
     ) -> Self {
         let cancel_token = CancellationToken::new();
         let (instruction_tx, instruction_rx) = tokio::sync::mpsc::channel(10);
@@ -51,6 +54,7 @@ impl ExecutorActor {
             repo_pool,
             event_tx,
             worker,
+            acp_config,
         }
     }
 }
@@ -65,6 +69,7 @@ impl Actor for ExecutorActor {
         let event_tx = self.event_tx.clone();
         let instruction_rx = self.instruction_rx.take().unwrap();
         let worker = self.worker.clone();
+        let acp_config = self.acp_config.clone();
 
         std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -79,6 +84,7 @@ impl Actor for ExecutorActor {
                     instruction_rx,
                     event_tx,
                     repo_pool,
+                    acp_config,
                 ).await;
 
                 if let Err(ref e) = result {
@@ -104,6 +110,7 @@ async fn execute_task(
     mut instruction_rx: tokio::sync::mpsc::Receiver<TaskInstruction>,
     event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
     repo_pool: Address<RepoPoolActor>,
+    acp_config: AcpConfig,
 ) -> Result<()> {
     let slot_path = repo_pool
         .send(AcquireSlot {
@@ -135,6 +142,7 @@ async fn execute_task(
         cancel_token.clone(),
         &mut instruction_rx,
         event_tx.clone(),
+        &acp_config,
     ).await;
 
     if !cancel_token.is_cancelled() && result.is_ok() {
@@ -172,18 +180,27 @@ async fn execute_agent(
     cancel_token: CancellationToken,
     instruction_rx: &mut tokio::sync::mpsc::Receiver<TaskInstruction>,
     event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
+    acp_config: &AcpConfig,
 ) -> Result<()> {
-    let agent_path =
-        which::which("opencode").map_err(|_| anyhow::anyhow!("Agent binary not found"))?;
+    let agent_config = acp_config
+        .agent_servers
+        .iter()
+        .next()
+        .map(|(_, v)| v.clone())
+        .ok_or_else(|| anyhow::anyhow!("No agent servers configured in acp_config.json"))?;
 
-    let mut child = tokio::process::Command::new(&agent_path)
-        .args(["acp"])
+    let mut cmd = tokio::process::Command::new(&agent_config.command);
+    cmd.args(&agent_config.args)
         .current_dir(workdir)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .context("Failed to spawn agent process")?;
+        .kill_on_drop(true);
+
+    for (key, value) in &agent_config.env {
+        cmd.env(key, value);
+    }
+
+    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
 
     let stdin = child.stdin.take().unwrap();
     let stdout = child.stdout.take().unwrap();

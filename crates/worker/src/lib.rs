@@ -7,7 +7,7 @@ pub mod utils;
 use crate::actors::manager::{GetRunningTaskIds, HandleInstruction};
 use crate::actors::{ManagerActor, RepoPoolActor};
 use anyhow::{Context, Error};
-pub use config::WorkerConfig;
+pub use config::{AcpConfig, WorkerConfig};
 use parallel_common::{
     RegisterWorkerRequest, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction,
 };
@@ -52,11 +52,18 @@ impl Clone for Config {
 }
 pub struct App {
     config: Config,
+    acp_config: AcpConfig,
 }
 
 impl App {
     pub fn new(config: Config) -> Self {
-        Self { config }
+        let acp_config = AcpConfig::load(&config.work_base).unwrap_or_else(|e| {
+            tracing::warn!("Failed to load acp config: {}, using empty config", e);
+            AcpConfig {
+                agent_servers: Default::default(),
+            }
+        });
+        Self { config, acp_config }
     }
     pub async fn run(&self) {
         let health_addr: SocketAddr = format!("0.0.0.0:{}", self.config.health_port).parse().unwrap();
@@ -79,6 +86,7 @@ impl App {
         xtra::spawn_tokio(
             ManagerActor::new(
                 self.config.clone(),
+                self.acp_config.clone(),
                 repo_pool_addr,
                 manager_addr.clone(),
                 event_tx.clone(),
@@ -94,7 +102,15 @@ impl App {
         event_tx: Sender<WorkerEvent>,
         mut event_rx: Receiver<WorkerEvent>,
     ) -> anyhow::Result<()> {
-        let capabilities = WorkerCapabilities::default();
+        let capabilities = WorkerCapabilities {
+            has_git: true,
+            available_agents: self.acp_config.available_agents(),
+            supported_languages: vec![
+                "rust".to_string(),
+                "python".to_string(),
+                "javascript".to_string(),
+            ],
+        };
 
         let mut token = None;
 

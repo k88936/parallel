@@ -35,7 +35,7 @@ impl WorkerStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerCapabilities {
     pub has_git: bool,
-    pub has_opencode: bool,
+    pub available_agents: Vec<String>,
     pub supported_languages: Vec<String>,
 }
 
@@ -43,7 +43,7 @@ impl Default for WorkerCapabilities {
     fn default() -> Self {
         Self {
             has_git: true,
-            has_opencode: true,
+            available_agents: vec![],
             supported_languages: vec![
                 "rust".to_string(),
                 "python".to_string(),

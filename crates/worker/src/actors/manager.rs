@@ -5,6 +5,7 @@ use xtra::{Actor, Address, Mailbox};
 
 use parallel_common::{WorkerEvent, WorkerInstruction};
 
+use crate::AcpConfig;
 use crate::Config;
 use crate::actors::{Cancel, ExecutorActor, RepoPoolActor, SendTaskInstruction, TaskInstruction};
 
@@ -21,6 +22,7 @@ struct RunningTask {
 
 pub struct ManagerActor {
     config: Config,
+    acp_config: AcpConfig,
     repo_pool_addr: Address<RepoPoolActor>,
     self_addr: Address<Self>,
     event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
@@ -29,12 +31,14 @@ pub struct ManagerActor {
 impl ManagerActor {
     pub(crate) fn new(
         config: Config,
+        acp_config: AcpConfig,
         repo_pool_addr: Address<RepoPoolActor>,
         self_addr: Address<Self>,
         event_tx: tokio::sync::mpsc::Sender<WorkerEvent>,
     ) -> Self {
         Self {
             config,
+            acp_config,
             repo_pool_addr,
             self_addr,
             event_tx,
@@ -73,9 +77,10 @@ impl xtra::Handler<HandleInstruction> for ManagerActor {
                 let repo_pool = self.repo_pool_addr.clone();
                 let event_tx = self.event_tx.clone();
                 let worker_addr = self.self_addr.clone();
+                let acp_config = self.acp_config.clone();
 
                 let (task_addr, task_mailbox) = Mailbox::unbounded();
-                let task_actor = ExecutorActor::new(task, repo_pool, event_tx, worker_addr);
+                let task_actor = ExecutorActor::new(task, repo_pool, event_tx, worker_addr, acp_config);
                 xtra::spawn_tokio(task_actor, (task_addr.clone(), task_mailbox));
 
                 self.running_tasks.insert(
