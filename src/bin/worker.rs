@@ -35,11 +35,16 @@ async fn main(){
         .map(|v| v.parse().unwrap_or(4))
         .unwrap_or(4);
 
+    let health_port = env::var("WORKER_HEALTH_PORT")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(8081);
+
     info!(
         work_base = %work_base.display(),
         server_url = %server_url,
         worker_name = %worker_name,
         max_concurrent = max_concurrent,
+        health_port = health_port,
         "Worker configuration loaded"
     );
 
@@ -48,6 +53,7 @@ async fn main(){
         max_concurrent,
         server_url,
         name:worker_name,
+        health_port,
     };
     App::new(config).run().await
 }

@@ -12,16 +12,21 @@ use parallel_common::{
     RegisterWorkerRequest, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction,
 };
 use parallel_message_broker::{AuthError, MessageBrokerClient};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use xtra::{Address, Mailbox};
+use axum::{Router, routing::get, http::StatusCode, Json};
+use serde_json::json;
+use tower_http::cors::CorsLayer;
 
 pub struct Config {
     pub work_base: PathBuf,
     pub max_concurrent: usize,
     pub server_url: String,
     pub name: String,
+    pub health_port: u16,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -30,6 +35,7 @@ impl Default for Config {
             max_concurrent: 4,
             server_url: "localhost:3000".into(),
             name: "worker".to_string(),
+            health_port: 8080,
         }
     }
 }
@@ -40,6 +46,7 @@ impl Clone for Config {
             max_concurrent: self.max_concurrent,
             server_url: self.server_url.clone(),
             name: self.name.clone(),
+            health_port: self.health_port,
         }
     }
 }
@@ -52,6 +59,17 @@ impl App {
         Self { config }
     }
     pub async fn run(&self) {
+        let health_addr: SocketAddr = format!("0.0.0.0:{}", self.config.health_port).parse().unwrap();
+        let health_app = Router::new()
+            .route("/health", get(health_check))
+            .layer(CorsLayer::permissive());
+
+        tracing::info!("Worker health check listening on {}", health_addr);
+        tokio::spawn(async move {
+            let listener = tokio::net::TcpListener::bind(health_addr).await.unwrap();
+            axum::serve(listener, health_app).await.unwrap();
+        });
+
         let repo_pool_base = self.config.work_base.join("repos");
         let repo_pool_addr =
             xtra::spawn_tokio(RepoPoolActor::new(repo_pool_base), Mailbox::unbounded());
@@ -227,4 +245,8 @@ impl App {
             }
         }
     }
+}
+
+async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
+    (StatusCode::OK, Json(json!({"status": "ok"})))
 }

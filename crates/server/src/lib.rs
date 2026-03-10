@@ -25,7 +25,7 @@ use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
 use db::migration::Migrator;
-use controller::{project, task, worker};
+use controller::{project, task, worker, health};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use parallel_message_broker::MessageBrokerServer;
 use repository::{TaskRepository, WorkerRepository, ProjectRepository};
@@ -98,6 +98,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     );
 
     let app = Router::new()
+        .route("/health", get(health::health_check))
         .route("/api/tasks", post(task::create_task))
         .route("/api/tasks", get(task::list_tasks))
         .route("/api/tasks/:id", get(task::get_task))
