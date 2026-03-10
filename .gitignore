@@ -1,4 +1,4 @@
 /target
 /work/
 /*.db
-/web/src/lib/sshKey.js
+/web/src/lib/sshKey.*

@@ -12,10 +12,10 @@ use agent_client_protocol::{
 
 use parallel_common::{HumanFeedback, TaskAssignment, WorkerEvent};
 
+use crate::AcpConfig;
+use crate::actors::{AcquireSlot, ManagerActor, ReleaseSlot, RepoPoolActor, TaskCompleted};
 use crate::code::acp_client::ACPClient;
 use crate::repo::repo_ops::GitOps;
-use crate::actors::{RepoPoolActor, AcquireSlot, ReleaseSlot, TaskCompleted, ManagerActor};
-use crate::AcpConfig;
 
 #[derive(Debug, Clone)]
 pub enum TaskInstruction {
@@ -85,16 +85,19 @@ impl Actor for ExecutorActor {
                     event_tx,
                     repo_pool,
                     acp_config,
-                ).await;
+                )
+                .await;
 
                 if let Err(ref e) = result {
                     tracing::error!(task_id = %task.id, error = %e, "Task failed");
                 }
 
-                let _ = worker.send(TaskCompleted {
-                    task_id: task.id,
-                    result,
-                }).await;
+                let _ = worker
+                    .send(TaskCompleted {
+                        task_id: task.id,
+                        result,
+                    })
+                    .await;
             });
         });
 
@@ -124,15 +127,17 @@ async fn execute_task(
         .context("Failed to acquire slot")?
         .context("Failed to acquire repo slot")?;
 
-    let workdir = std::fs::canonicalize(&slot_path)
-        .context("Failed to resolve absolute path for workdir")?;
+    let workdir =
+        std::fs::canonicalize(&slot_path).context("Failed to resolve absolute path for workdir")?;
 
     if cancel_token.is_cancelled() {
         tracing::info!(task_id = %task.id, "Task cancelled before execution");
-        let _ = repo_pool.send(ReleaseSlot {
-            repo_url: task.repo_url.clone(),
-            task_id: task.id,
-        }).await;
+        let _ = repo_pool
+            .send(ReleaseSlot {
+                repo_url: task.repo_url.clone(),
+                task_id: task.id,
+            })
+            .await;
         return Err(anyhow::anyhow!("Task cancelled before execution"));
     }
 
@@ -143,7 +148,8 @@ async fn execute_task(
         &mut instruction_rx,
         event_tx.clone(),
         &acp_config,
-    ).await;
+    )
+    .await;
 
     if !cancel_token.is_cancelled() && result.is_ok() {
         tracing::info!(
@@ -164,10 +170,13 @@ async fn execute_task(
         );
     }
 
-    if let Err(e) = repo_pool.send(ReleaseSlot {
-        repo_url: task.repo_url.clone(),
-        task_id: task.id,
-    }).await {
+    if let Err(e) = repo_pool
+        .send(ReleaseSlot {
+            repo_url: task.repo_url.clone(),
+            task_id: task.id,
+        })
+        .await
+    {
         tracing::warn!(task_id = %task.id, error = %e, "Failed to release repo slot");
     }
 
@@ -213,9 +222,9 @@ async fn execute_agent(
 
     tokio::spawn(async move {
         cancel_token_clone.cancelled().await;
-        let mut child = child_clone.lock().await;
         #[cfg(unix)]
         {
+            let child = child_clone.lock().await;
             if let Some(pid) = child.id() {
                 use nix::sys::signal::{Signal, kill};
                 use nix::unistd::Pid;
@@ -224,6 +233,7 @@ async fn execute_agent(
         }
         #[cfg(windows)]
         {
+            let mut child = child_clone.lock().await;
             let _ = child.kill().await;
         }
     });

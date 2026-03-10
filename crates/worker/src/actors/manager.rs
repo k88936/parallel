@@ -172,7 +172,7 @@ impl xtra::Handler<TaskCompleted> for ManagerActor {
                 }
             }
             Err(e) => {
-                tracing::error!(task_id = %msg.task_id, error = %e, "Task failed");
+                tracing::error!(task_id = %msg.task_id, "Task failed: {:#}", e);
                 WorkerEvent::TaskFailed {
                     task_id: msg.task_id,
                     error: e.to_string(),
