@@ -1,11 +1,14 @@
-use sea_orm::entity::prelude::*;
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "tasks")]
-pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
+use crate::db::schema::tasks;
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = tasks)]
+pub struct Task {
+    pub id: String,
     pub title: String,
     pub repo_url: String,
     pub description: String,
@@ -13,42 +16,70 @@ pub struct Model {
     pub target_branch: String,
     pub status: String,
     pub priority: i32,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
-    pub claimed_by: Option<Uuid>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub claimed_by: Option<String>,
     pub review_data_json: Option<String>,
     pub ssh_key: String,
     pub max_execution_time: i64,
-    pub project_id: Option<Uuid>,
+    pub project_id: Option<String>,
     pub required_labels_json: String,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::workers::Entity",
-        from = "Column::ClaimedBy",
-        to = "super::workers::Column::Id"
-    )]
-    Worker,
-    #[sea_orm(
-        belongs_to = "super::projects::Entity",
-        from = "Column::ProjectId",
-        to = "super::projects::Column::Id"
-    )]
-    Project,
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = tasks)]
+pub struct NewTask {
+    pub id: String,
+    pub title: String,
+    pub repo_url: String,
+    pub description: String,
+    pub base_branch: String,
+    pub target_branch: String,
+    pub status: String,
+    pub priority: i32,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub claimed_by: Option<String>,
+    pub review_data_json: Option<String>,
+    pub ssh_key: String,
+    pub max_execution_time: i64,
+    pub project_id: Option<String>,
+    pub required_labels_json: String,
 }
 
-impl Related<super::workers::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Worker.def()
+#[derive(AsChangeset, Debug, Clone)]
+#[diesel(table_name = tasks)]
+pub struct TaskChangeset {
+    pub title: Option<String>,
+    pub repo_url: Option<String>,
+    pub description: Option<String>,
+    pub base_branch: Option<String>,
+    pub target_branch: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<i32>,
+    pub updated_at: Option<NaiveDateTime>,
+    pub claimed_by: Option<Option<String>>,
+    pub review_data_json: Option<Option<String>>,
+    pub ssh_key: Option<String>,
+    pub max_execution_time: Option<i64>,
+    pub project_id: Option<Option<String>>,
+    pub required_labels_json: Option<String>,
+}
+
+impl Task {
+    pub fn get_uuid(&self) -> Uuid {
+        Uuid::parse_str(&self.id).unwrap_or_default()
+    }
+
+    pub fn get_claimed_by_uuid(&self) -> Option<Uuid> {
+        self.claimed_by
+            .as_ref()
+            .and_then(|s| Uuid::parse_str(s).ok())
+    }
+
+    pub fn get_project_id_uuid(&self) -> Option<Uuid> {
+        self.project_id
+            .as_ref()
+            .and_then(|s| Uuid::parse_str(s).ok())
     }
 }
-
-impl Related<super::projects::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Project.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}

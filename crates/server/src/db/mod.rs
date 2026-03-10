@@ -1,5 +1,6 @@
+pub mod connection;
 pub mod entity;
-pub mod migration;
+pub mod schema;
 
+pub use connection::*;
 pub use entity::*;
-pub use migration::*;

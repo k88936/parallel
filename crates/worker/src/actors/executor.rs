@@ -208,17 +208,23 @@ async fn execute_agent(
     let client = Arc::new(ACPClient::new(workdir.clone()));
 
     let cancel_token_clone = cancel_token.clone();
-    let pid = child.id();
+    let child = Arc::new(tokio::sync::Mutex::new(child));
+    let child_clone = child.clone();
 
     tokio::spawn(async move {
         cancel_token_clone.cancelled().await;
-        if let Some(pid) = pid {
-            #[cfg(unix)]
-            {
+        let mut child = child_clone.lock().await;
+        #[cfg(unix)]
+        {
+            if let Some(pid) = child.id() {
                 use nix::sys::signal::{Signal, kill};
                 use nix::unistd::Pid;
                 let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
             }
+        }
+        #[cfg(windows)]
+        {
+            let _ = child.kill().await;
         }
     });
 

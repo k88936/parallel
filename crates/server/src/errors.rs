@@ -45,8 +45,8 @@ impl From<ServerError> for StatusCode {
     }
 }
 
-impl From<sea_orm::DbErr> for ServerError {
-    fn from(err: sea_orm::DbErr) -> Self {
+impl From<diesel::result::Error> for ServerError {
+    fn from(err: diesel::result::Error) -> Self {
         ServerError::DatabaseError(err.to_string())
     }
 }

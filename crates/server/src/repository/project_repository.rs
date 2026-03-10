@@ -1,35 +1,43 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::*;
+use diesel::prelude::*;
+use diesel::r2d2::ConnectionManager;
+use diesel::sqlite::SqliteConnection;
 use uuid::Uuid;
 
 use parallel_common::{Project, RepoConfig, SshKeyConfig};
 
-use crate::db::entity::projects;
+use super::task_repository::DbPool;
+use crate::db::entity::{NewProject, Project as DbProject};
+use crate::db::schema::projects as projects_schema;
 use crate::errors::{ServerError, ServerResult};
 
 pub struct ProjectRepository {
-    db: DatabaseConnection,
+    pool: DbPool,
 }
 
 impl ProjectRepository {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+
+    fn get_conn(&self) -> ServerResult<r2d2::PooledConnection<ConnectionManager<SqliteConnection>>> {
+        self.pool.get().map_err(|e| ServerError::InternalError(e.to_string()))
     }
 }
 
-fn model_to_project(p: projects::Model) -> Project {
+fn db_project_to_project(p: DbProject) -> Project {
     let repos: Vec<RepoConfig> = serde_json::from_str(&p.repos_json).unwrap_or_default();
     let ssh_keys: Vec<SshKeyConfig> = serde_json::from_str(&p.ssh_keys_json).unwrap_or_default();
     
     Project {
-        id: p.id,
+        id: p.get_uuid(),
         name: p.name,
         repos,
         ssh_keys,
-        created_at: p.created_at,
-        updated_at: p.updated_at,
+        created_at: chrono::DateTime::from_naive_utc_and_offset(p.created_at, Utc),
+        updated_at: chrono::DateTime::from_naive_utc_and_offset(p.updated_at, Utc),
     }
 }
 
@@ -74,28 +82,33 @@ impl ProjectRepositoryTrait for ProjectRepository {
         repos: &Vec<RepoConfig>,
         ssh_keys: &Vec<SshKeyConfig>,
     ) -> Result<()> {
-        let now = Utc::now();
+        let now = Utc::now().naive_utc();
 
-        let project = projects::ActiveModel {
-            id: Set(id),
-            name: Set(name),
-            repos_json: Set(serde_json::to_string(repos)?),
-            ssh_keys_json: Set(serde_json::to_string(ssh_keys)?),
-            created_at: Set(now),
-            updated_at: Set(now),
+        let new_project = NewProject {
+            id: id.to_string(),
+            name,
+            repos_json: serde_json::to_string(repos)?,
+            ssh_keys_json: serde_json::to_string(ssh_keys)?,
+            created_at: now,
+            updated_at: now,
         };
 
-        projects::Entity::insert(project).exec(&self.db).await?;
+        let mut conn = self.get_conn()?;
+        diesel::insert_into(projects_schema::table)
+            .values(&new_project)
+            .execute(&mut conn)?;
+
         Ok(())
     }
 
     async fn find_by_id(&self, project_id: &Uuid) -> ServerResult<Project> {
-        let project = projects::Entity::find_by_id(*project_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| ServerError::ProjectNotFound(*project_id))?;
+        let mut conn = self.get_conn()?;
+        let project = projects_schema::table
+            .filter(projects_schema::id.eq(project_id.to_string()))
+            .first::<DbProject>(&mut conn)
+            .map_err(|_| ServerError::ProjectNotFound(*project_id))?;
 
-        Ok(model_to_project(project))
+        Ok(db_project_to_project(project))
     }
 
     async fn find_many(
@@ -104,29 +117,37 @@ impl ProjectRepositoryTrait for ProjectRepository {
         sort_direction: &str,
         limit: u64,
     ) -> Result<Vec<Project>> {
-        let mut query = projects::Entity::find();
+        let mut conn = self.get_conn()?;
+        let pattern = search.map(|s| format!("%{}%", s));
+        let mut query = projects_schema::table.into_boxed();
 
-        if let Some(s) = search {
-            let pattern = format!("%{}%", s);
-            query = query.filter(projects::Column::Name.like(&pattern));
+        if let Some(ref pat) = pattern {
+            query = query.filter(projects_schema::name.like(pat));
         }
 
         if sort_direction == "desc" {
-            query = query.order_by_desc(projects::Column::CreatedAt);
+            query = query.order_by(projects_schema::created_at.desc());
         } else {
-            query = query.order_by_asc(projects::Column::CreatedAt);
+            query = query.order_by(projects_schema::created_at.asc());
         }
 
-        let db_projects = query.limit(limit).all(&self.db).await?;
+        let db_projects = query
+            .limit(limit as i64)
+            .load::<DbProject>(&mut conn)?;
 
         Ok(db_projects
             .into_iter()
-            .map(model_to_project)
+            .map(db_project_to_project)
             .collect())
     }
 
     async fn count_all(&self) -> Result<u64> {
-        Ok(projects::Entity::find().count(&self.db).await?)
+        let mut conn = self.get_conn()?;
+        let count = projects_schema::table
+            .count()
+            .get_result::<i64>(&mut conn)? as u64;
+
+        Ok(count)
     }
 
     async fn update(
@@ -136,36 +157,53 @@ impl ProjectRepositoryTrait for ProjectRepository {
         repos: Option<&Vec<RepoConfig>>,
         ssh_keys: Option<&Vec<SshKeyConfig>>,
     ) -> ServerResult<Project> {
-        let now = Utc::now();
-        let project = projects::Entity::find_by_id(*project_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| ServerError::ProjectNotFound(*project_id))?;
+        let now = Utc::now().naive_utc();
 
-        let mut project: projects::ActiveModel = project.into();
-        if let Some(n) = name {
-            project.name = Set(n);
-        }
-        if let Some(r) = repos {
-            project.repos_json = Set(serde_json::to_string(r)?);
-        }
-        if let Some(k) = ssh_keys {
-            project.ssh_keys_json = Set(serde_json::to_string(k)?);
-        }
-        project.updated_at = Set(now);
+        let mut conn = self.get_conn()?;
         
-        let updated = project.update(&self.db).await?;
-        Ok(model_to_project(updated))
+        let project = projects_schema::table
+            .filter(projects_schema::id.eq(project_id.to_string()))
+            .first::<DbProject>(&mut conn)
+            .map_err(|_| ServerError::ProjectNotFound(*project_id))?;
+
+        let new_name = name.unwrap_or(project.name);
+        let new_repos_json = match repos {
+            Some(r) => serde_json::to_string(r)?,
+            None => project.repos_json,
+        };
+        let new_ssh_keys_json = match ssh_keys {
+            Some(k) => serde_json::to_string(k)?,
+            None => project.ssh_keys_json,
+        };
+
+        diesel::update(projects_schema::table)
+            .filter(projects_schema::id.eq(project_id.to_string()))
+            .set((
+                projects_schema::name.eq(new_name),
+                projects_schema::repos_json.eq(new_repos_json),
+                projects_schema::ssh_keys_json.eq(new_ssh_keys_json),
+                projects_schema::updated_at.eq(now),
+            ))
+            .execute(&mut conn)?;
+
+        let project = projects_schema::table
+            .filter(projects_schema::id.eq(project_id.to_string()))
+            .first::<DbProject>(&mut conn)?;
+
+        Ok(db_project_to_project(project))
     }
 
     async fn delete(&self, project_id: &Uuid) -> ServerResult<()> {
-        let project = projects::Entity::find_by_id(*project_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| ServerError::ProjectNotFound(*project_id))?;
+        let mut conn = self.get_conn()?;
+        let rows_affected = diesel::delete(
+            projects_schema::table.filter(projects_schema::id.eq(project_id.to_string()))
+        )
+        .execute(&mut conn)?;
 
-        let project: projects::ActiveModel = project.into();
-        project.delete(&self.db).await?;
+        if rows_affected == 0 {
+            return Err(ServerError::ProjectNotFound(*project_id));
+        }
+
         Ok(())
     }
 }

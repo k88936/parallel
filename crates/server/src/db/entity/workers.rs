@@ -1,22 +1,53 @@
-use sea_orm::entity::prelude::*;
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "workers")]
-pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
+use crate::db::schema::workers;
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = workers)]
+pub struct Worker {
+    pub id: String,
     pub token: String,
     pub name: String,
     pub status: String,
-    pub last_heartbeat: DateTimeUtc,
+    pub last_heartbeat: NaiveDateTime,
     pub current_tasks_json: String,
     pub pending_instructions_json: String,
     pub capabilities_json: String,
     pub max_concurrent: i32,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = workers)]
+pub struct NewWorker {
+    pub id: String,
+    pub token: String,
+    pub name: String,
+    pub status: String,
+    pub last_heartbeat: NaiveDateTime,
+    pub current_tasks_json: String,
+    pub pending_instructions_json: String,
+    pub capabilities_json: String,
+    pub max_concurrent: i32,
+}
 
-impl ActiveModelBehavior for ActiveModel {}
+#[derive(AsChangeset, Debug, Clone)]
+#[diesel(table_name = workers)]
+pub struct WorkerChangeset {
+    pub token: Option<String>,
+    pub name: Option<String>,
+    pub status: Option<String>,
+    pub last_heartbeat: Option<NaiveDateTime>,
+    pub current_tasks_json: Option<String>,
+    pub pending_instructions_json: Option<String>,
+    pub capabilities_json: Option<String>,
+    pub max_concurrent: Option<i32>,
+}
+
+impl Worker {
+    pub fn get_uuid(&self) -> Uuid {
+        Uuid::parse_str(&self.id).unwrap_or_default()
+    }
+}

@@ -1,28 +1,43 @@
-use sea_orm::entity::prelude::*;
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "projects")]
-pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
+use crate::db::schema::projects;
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = projects)]
+pub struct Project {
+    pub id: String,
     pub name: String,
     pub repos_json: String,
     pub ssh_keys_json: String,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(has_many = "super::tasks::Entity")]
-    Tasks,
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = projects)]
+pub struct NewProject {
+    pub id: String,
+    pub name: String,
+    pub repos_json: String,
+    pub ssh_keys_json: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
-impl Related<super::tasks::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Tasks.def()
+#[derive(AsChangeset, Debug, Clone)]
+#[diesel(table_name = projects)]
+pub struct ProjectChangeset {
+    pub name: Option<String>,
+    pub repos_json: Option<String>,
+    pub ssh_keys_json: Option<String>,
+    pub updated_at: Option<NaiveDateTime>,
+}
+
+impl Project {
+    pub fn get_uuid(&self) -> Uuid {
+        Uuid::parse_str(&self.id).unwrap_or_default()
     }
 }
-
-impl ActiveModelBehavior for ActiveModel {}

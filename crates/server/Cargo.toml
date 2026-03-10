@@ -22,8 +22,10 @@ base64 = "0.22"
 
 axum.workspace = true
 tower-http.workspace = true
-sea-orm.workspace = true
-sea-orm-migration.workspace = true
-
 tokio-tungstenite.workspace = true
+
+diesel = { version = "2", features = ["sqlite", "r2d2", "chrono", "uuid", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = { version = "2", features = ["sqlite"] }
+r2d2 = "0.8"
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 

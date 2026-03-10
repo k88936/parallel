@@ -18,13 +18,10 @@ use axum::{
     routing::{delete, get, post, put},
     middleware::from_fn,
 };
-use sea_orm::Database;
-use sea_orm_migration::MigratorTrait;
 use tower_http::cors::CorsLayer;
 use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
-use db::migration::Migrator;
 use controller::{project, task, worker, health, alert};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use parallel_message_broker::MessageBrokerServer;
@@ -37,14 +34,11 @@ use state::AppState;
 
 pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     info!("Connecting to database: {}", database_url);
-    let db = Database::connect(database_url).await?;
+    let pool = db::establish_connection(database_url)?;
 
-    info!("Running database migrations...");
-    Migrator::up(&db, None).await?;
-
-    let task_repository = Arc::new(TaskRepository::new(db.clone()));
-    let worker_repository = Arc::new(WorkerRepository::new(db.clone()));
-    let project_repository = Arc::new(ProjectRepository::new(db.clone()));
+    let task_repository = Arc::new(TaskRepository::new(pool.clone()));
+    let worker_repository = Arc::new(WorkerRepository::new(pool.clone()));
+    let project_repository = Arc::new(ProjectRepository::new(pool));
 
     let task_service = Arc::new(TaskService::new(task_repository.clone()));
     let worker_service = Arc::new(WorkerService::new(worker_repository.clone()));
@@ -106,17 +100,17 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/alerts/ws", get(alert::alert_websocket))
         .route("/api/tasks", post(task::create_task))
         .route("/api/tasks", get(task::list_tasks))
-        .route("/api/tasks/:id", get(task::get_task))
-        .route("/api/tasks/:id", delete(task::cancel_task))
-        .route("/api/tasks/:id/feedback", post(task::submit_feedback))
-        .route("/api/tasks/:id/review", get(task::get_review_data))
-        .route("/api/tasks/:id/status", post(task::update_task_status))
-        .route("/api/tasks/:id/retry", post(task::retry_task))
+        .route("/api/tasks/{id}", get(task::get_task))
+        .route("/api/tasks/{id}", delete(task::cancel_task))
+        .route("/api/tasks/{id}/feedback", post(task::submit_feedback))
+        .route("/api/tasks/{id}/review", get(task::get_review_data))
+        .route("/api/tasks/{id}/status", post(task::update_task_status))
+        .route("/api/tasks/{id}/retry", post(task::retry_task))
         .route("/api/projects", post(project::create_project))
         .route("/api/projects", get(project::list_projects))
-        .route("/api/projects/:id", get(project::get_project))
-        .route("/api/projects/:id", put(project::update_project))
-        .route("/api/projects/:id", delete(project::delete_project))
+        .route("/api/projects/{id}", get(project::get_project))
+        .route("/api/projects/{id}", put(project::update_project))
+        .route("/api/projects/{id}", delete(project::delete_project))
         .route("/api/workers/register", post(worker::register_worker))
         .route("/api/workers/ws", get(worker::worker_websocket))
         .route("/api/workers", get(worker::list_workers))
