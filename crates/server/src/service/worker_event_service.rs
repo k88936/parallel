@@ -127,6 +127,14 @@ impl EventProcessorTrait for EventProcessor {
                         timestamp: Utc::now(),
                     });
                 }
+                WorkerEvent::ResourceMonitor { resources } => {
+                    tracing::debug!(
+                        cpu = %resources.cpu_usage_percent,
+                        mem = %resources.memory_usage_percent,
+                        disk = %resources.disk_usage_percent,
+                        "Worker resource monitor"
+                    );
+                }
             }
         }
 

@@ -9,12 +9,14 @@ use crate::actors::{ManagerActor, RepoPoolActor};
 use anyhow::{Context, Error};
 pub use config::{AcpConfig, WorkerConfig};
 use parallel_common::{
-    RegisterWorkerRequest, WorkerCapabilities, WorkerEvent, WorkerInfo, WorkerInstruction,
+    RegisterWorkerRequest, ResourceMonitor, WorkerCapabilities, WorkerEvent, WorkerInfo,
+    WorkerInstruction,
 };
 use parallel_message_broker::{AuthError, MessageBrokerClient};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
+use sysinfo::System;
 use tokio::sync::mpsc::{Receiver, Sender};
 use xtra::{Address, Mailbox};
 use axum::{Router, routing::get, http::StatusCode, Json};
@@ -234,6 +236,7 @@ impl App {
 
     async fn heartbeat(manager_addr: Address<ManagerActor>, event_tx: Sender<WorkerEvent>) {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
+        let mut sys = System::new_all();
         loop {
             interval.tick().await;
             match manager_addr.clone().send(GetRunningTaskIds).await {
@@ -242,9 +245,49 @@ impl App {
                         running_tasks: running_task_ids,
                     };
                     let _ = event_tx.send(event).await;
+                    
+                    let resources = Self::collect_resources(&mut sys);
+                    let _ = event_tx.send(WorkerEvent::ResourceMonitor { resources }).await;
                 }
                 Err(_) => break,
             }
+        }
+    }
+    
+    fn collect_resources(sys: &mut System) -> ResourceMonitor {
+        use sysinfo::Disks;
+        
+        sys.refresh_cpu_all();
+        sys.refresh_memory();
+        
+        let cpu_usage = sys.global_cpu_usage();
+        
+        let total_memory = sys.total_memory();
+        let used_memory = sys.used_memory();
+        let memory_percent = if total_memory > 0 {
+            (used_memory as f64 / total_memory as f64) * 100.0
+        } else {
+            0.0
+        };
+        
+        let disks = Disks::new_with_refreshed_list();
+        let (disk_total, disk_used) = disks.iter().fold((0u64, 0u64), |(total, used), disk| {
+            (total + disk.total_space(), used + (disk.total_space() - disk.available_space()))
+        });
+        let disk_percent = if disk_total > 0 {
+            (disk_used as f64 / disk_total as f64) * 100.0
+        } else {
+            0.0
+        };
+        
+        ResourceMonitor {
+            cpu_usage_percent: cpu_usage,
+            memory_usage_percent: memory_percent as f32,
+            memory_used_mb: used_memory / 1024 / 1024,
+            memory_total_mb: total_memory / 1024 / 1024,
+            disk_usage_percent: disk_percent as f32,
+            disk_used_gb: disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
+            disk_total_gb: disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
         }
     }
     async fn forward_inst(json: String, manager_addr: Address<ManagerActor>) {

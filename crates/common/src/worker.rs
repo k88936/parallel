@@ -58,6 +58,17 @@ impl Default for WorkerCapabilities {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceMonitor {
+    pub cpu_usage_percent: f32,
+    pub memory_usage_percent: f32,
+    pub memory_used_mb: u64,
+    pub memory_total_mb: u64,
+    pub disk_usage_percent: f32,
+    pub disk_used_gb: f64,
+    pub disk_total_gb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {
     pub id: Uuid,
     pub token: String,

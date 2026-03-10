@@ -68,3 +68,4 @@ backoff = { version = "0.4", features = ["tokio"] }
 
 xtra = { version = "0.6", features = ["tokio"] }
 tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
+sysinfo = "0.33"

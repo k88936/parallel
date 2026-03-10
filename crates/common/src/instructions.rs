@@ -1,3 +1,4 @@
+use crate::ResourceMonitor;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -94,6 +95,9 @@ pub enum WorkerInstruction {
 pub enum WorkerEvent {
     Heartbeat {
         running_tasks: Vec<Uuid>,
+    },
+    ResourceMonitor {
+        resources: ResourceMonitor,
     },
     TaskStarted {
         task_id: Uuid,
