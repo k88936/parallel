@@ -5,12 +5,15 @@ use tracing::{error, info, warn};
 
 use crate::errors::ServerResult;
 use crate::service::worker_service::WorkerServiceTrait;
-use parallel_common::WorkerStatus;
+use parallel_common::{Alert, WorkerStatus};
 use crate::service::task_service::TaskServiceTrait;
+use crate::service::alert_service::AlertService;
+use chrono::Utc;
 
 pub struct HeartbeatMonitor {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
+    alert_service: AlertService,
     timeout_seconds: i64,
     check_interval_seconds: u64,
 }
@@ -19,12 +22,14 @@ impl HeartbeatMonitor {
     pub fn new(
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
+        alert_service: AlertService,
         timeout_seconds: i64,
         check_interval_seconds: u64,
     ) -> Self {
         Self {
             task_service,
             worker_service,
+            alert_service,
             timeout_seconds,
             check_interval_seconds,
         }
@@ -53,6 +58,12 @@ impl HeartbeatMonitor {
         }
 
         for (worker_id, running_tasks) in stale_workers {
+            let worker_info = self.worker_service.get(&worker_id).await.ok();
+            let worker_name = worker_info
+                .as_ref()
+                .map(|w| w.name.clone())
+                .unwrap_or_else(|| worker_id.to_string());
+
             info!(
                 "Worker {} heartbeat timeout (last heartbeat > {}s ago), marking as Offline",
                 worker_id, self.timeout_seconds
@@ -66,6 +77,13 @@ impl HeartbeatMonitor {
                 error!("Failed to mark worker {} as Offline: {}", worker_id, e);
                 continue;
             }
+
+            self.alert_service.emit(Alert::WorkerOffline {
+                worker_id,
+                worker_name: worker_name.clone(),
+                running_tasks: running_tasks.clone(),
+                timestamp: Utc::now(),
+            });
 
             if !running_tasks.is_empty() {
                 warn!(
@@ -101,12 +119,14 @@ impl HeartbeatMonitor {
 pub fn spawn_heartbeat_monitor(
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
+    alert_service: AlertService,
     timeout_seconds: i64,
     check_interval_seconds: u64,
 ) {
     let monitor = HeartbeatMonitor::new(
         task_service,
         worker_service,
+        alert_service,
         timeout_seconds,
         check_interval_seconds,
     );

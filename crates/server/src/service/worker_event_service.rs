@@ -1,26 +1,31 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
+use chrono::Utc;
 
-use parallel_common::{ReviewData, TaskStatus, WorkerEvent};
+use parallel_common::{Alert, ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
 use crate::service::task_service::TaskServiceTrait;
 use crate::service::worker_service::WorkerServiceTrait;
+use crate::service::alert_service::AlertService;
 
 pub struct EventProcessor {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
+    alert_service: AlertService,
 }
 
 impl EventProcessor {
     pub fn new(
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
+        alert_service: AlertService,
     ) -> Self {
         Self {
             task_service,
             worker_service,
+            alert_service,
         }
     }
 }
@@ -53,22 +58,51 @@ impl EventProcessorTrait for EventProcessor {
                 }
                 WorkerEvent::TaskCompleted { task_id } => {
                     running_tasks.retain(|id| id != &task_id);
+                    let task = self.task_service.get(&task_id).await.ok();
+                    let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
+                    
                     self.task_service
                         .complete_iteration(&task_id, TaskStatus::Completed)
                         .await?;
+                    
+                    self.alert_service.emit(Alert::TaskCompleted {
+                        task_id,
+                        task_title,
+                        timestamp: Utc::now(),
+                    });
                 }
                 WorkerEvent::TaskFailed { task_id, error } => {
                     running_tasks.retain(|id| id != &task_id);
                     tracing::error!("Task {} failed: {}", task_id, error);
+                    
+                    let task = self.task_service.get(&task_id).await.ok();
+                    let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
+                    
                     self.task_service
                         .complete_iteration(&task_id, TaskStatus::Failed)
                         .await?;
+                    
+                    self.alert_service.emit(Alert::TaskFailed {
+                        task_id,
+                        task_title,
+                        error: error.clone(),
+                        timestamp: Utc::now(),
+                    });
                 }
                 WorkerEvent::TaskCancelled { task_id } => {
                     running_tasks.retain(|id| id != &task_id);
+                    let task = self.task_service.get(&task_id).await.ok();
+                    let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
+                    
                     self.task_service
                         .complete_iteration(&task_id, TaskStatus::Cancelled)
                         .await?;
+                    
+                    self.alert_service.emit(Alert::TaskCancelled {
+                        task_id,
+                        task_title,
+                        timestamp: Utc::now(),
+                    });
                 }
                 WorkerEvent::TaskAwaitingReview {
                     task_id,
@@ -77,11 +111,21 @@ impl EventProcessorTrait for EventProcessor {
                 } => {
                     tracing::info!("Task {} awaiting review", task_id);
 
+                    let task = self.task_service.get(&task_id).await.ok();
+                    let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
+
                     let review_data = ReviewData { messages, diff };
 
                     self.task_service
                         .set_review_data(&task_id, review_data)
                         .await?;
+                    
+                    self.alert_service.emit(Alert::TaskReviewRequested {
+                        task_id,
+                        task_title,
+                        worker_id: *worker_id,
+                        timestamp: Utc::now(),
+                    });
                 }
             }
         }

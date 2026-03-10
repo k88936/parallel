@@ -5,12 +5,15 @@ use tracing::{error, info, warn};
 
 use crate::errors::ServerResult;
 use crate::service::worker_service::WorkerServiceTrait;
-use parallel_common::WorkerStatus;
+use parallel_common::{Alert, WorkerStatus};
 use crate::service::task_service::TaskServiceTrait;
+use crate::service::alert_service::AlertService;
+use chrono::Utc;
 
 pub struct OrphanMonitor {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
+    alert_service: AlertService,
     check_interval_seconds: u64,
 }
 
@@ -18,11 +21,13 @@ impl OrphanMonitor {
     pub fn new(
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
+        alert_service: AlertService,
         check_interval_seconds: u64,
     ) -> Self {
         Self {
             task_service,
             worker_service,
+            alert_service,
             check_interval_seconds,
         }
     }
@@ -96,12 +101,21 @@ impl OrphanMonitor {
                 task.id, task.max_execution_time
             );
 
+            let task_title = task.title.clone();
+
             if let Err(e) = self
                 .task_service
                 .fail_task(&task.id, "Execution timeout")
                 .await
             {
                 error!("Failed to mark task {} as Failed: {}", task.id, e);
+            } else {
+                self.alert_service.emit(Alert::TaskTimeout {
+                    task_id: task.id,
+                    task_title,
+                    max_execution_time: task.max_execution_time,
+                    timestamp: Utc::now(),
+                });
             }
         }
 
@@ -112,9 +126,10 @@ impl OrphanMonitor {
 pub fn spawn_orphan_monitor(
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
+    alert_service: AlertService,
     check_interval_seconds: u64,
 ) {
-    let monitor = OrphanMonitor::new(task_service, worker_service, check_interval_seconds);
+    let monitor = OrphanMonitor::new(task_service, worker_service, alert_service, check_interval_seconds);
 
     tokio::spawn(async move {
         info!(

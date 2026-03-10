@@ -1,8 +1,11 @@
+pub mod alert_service;
 pub mod project_service;
 pub mod task_service;
 pub mod worker_service;
 pub mod worker_event_service;
 
+pub use alert_service::AlertService;
+pub use alert_service::AlertServiceTrait;
 pub use worker_event_service::EventProcessor;
 pub use worker_event_service::EventProcessorTrait;
 pub use crate::cron::heartbeat_monitor::spawn_heartbeat_monitor;

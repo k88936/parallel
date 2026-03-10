@@ -25,12 +25,12 @@ use tower_http::request_id::SetRequestIdLayer;
 use tracing::info;
 
 use db::migration::Migrator;
-use controller::{project, task, worker, health};
+use controller::{project, task, worker, health, alert};
 use crate::middleware::{add_correlation_header, CorrelationIdGenerator};
 use parallel_message_broker::MessageBrokerServer;
 use repository::{TaskRepository, WorkerRepository, ProjectRepository};
 use service::{
-    EventProcessor, ProjectService, TaskService, WorkerService,
+    EventProcessor, ProjectService, TaskService, WorkerService, AlertService,
     spawn_heartbeat_monitor, spawn_orphan_monitor, spawn_task_scheduler,
 };
 use state::AppState;
@@ -50,9 +50,11 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     let worker_service = Arc::new(WorkerService::new(worker_repository.clone()));
     let project_service = Arc::new(ProjectService::new(project_repository));
     let message_broker = MessageBrokerServer::new();
+    let alert_service = AlertService::new();
     let event_processor = Arc::new(EventProcessor::new(
         task_service.clone(),
         worker_service.clone(),
+        alert_service.clone(),
     ));
 
     let state = AppState::new(
@@ -61,6 +63,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         project_service,
         event_processor,
         message_broker.clone(),
+        alert_service.clone(),
     );
 
     let heartbeat_timeout: i64 = std::env::var("HEARTBEAT_TIMEOUT_SECONDS")
@@ -86,10 +89,11 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     spawn_heartbeat_monitor(
         task_service.clone(),
         worker_service.clone(),
+        alert_service.clone(),
         heartbeat_timeout,
         heartbeat_interval,
     );
-    spawn_orphan_monitor(task_service.clone(), worker_service.clone(), orphan_check_interval);
+    spawn_orphan_monitor(task_service.clone(), worker_service.clone(), alert_service.clone(), orphan_check_interval);
     spawn_task_scheduler(
         task_service,
         worker_service,
@@ -99,6 +103,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
 
     let app = Router::new()
         .route("/health", get(health::health_check))
+        .route("/api/alerts/ws", get(alert::alert_websocket))
         .route("/api/tasks", post(task::create_task))
         .route("/api/tasks", get(task::list_tasks))
         .route("/api/tasks/:id", get(task::get_task))
