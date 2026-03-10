@@ -8,8 +8,6 @@ pub mod service;
 pub mod state;
 pub mod cron;
 pub mod repository;
-pub mod common;
-
 use std::sync::Arc;
 
 use anyhow::Result;

@@ -13,7 +13,7 @@ pub struct AppState {
     pub worker_service: Arc<dyn WorkerServiceTrait>,
     pub project_service: Arc<dyn ProjectServiceTrait>,
     pub event_processor: Arc<dyn EventProcessorTrait>,
-    pub message_broker: MessageBrokerServer,
+    pub message_broker: Arc<MessageBrokerServer>,
     pub alert_service: AlertService,
 }
 
@@ -31,7 +31,7 @@ impl AppState {
             worker_service,
             project_service,
             event_processor,
-            message_broker,
+            message_broker: Arc::new(message_broker),
             alert_service,
         }
     }
