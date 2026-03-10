@@ -1,3 +1,4 @@
+use parallel_worker::{App, Config};
 use std::env;
 use std::path::PathBuf;
 use tracing::{Level, info};
@@ -14,7 +15,7 @@ fn init_logging() {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main(){
     init_logging();
 
     info!("=== Parallel Worker Starting ===");
@@ -42,12 +43,11 @@ async fn main() -> anyhow::Result<()> {
         "Worker configuration loaded"
     );
 
-    let mut worker = parallel_worker::Worker::new(work_base, max_concurrent, server_url);
-
-    worker.load_token(&worker_name).await?;
-    info!("Starting worker main loop");
-    worker.run().await?;
-
-    info!("=== Parallel Worker Finished ===");
-    Ok(())
+    let config = Config {
+        work_base,
+        max_concurrent,
+        server_url,
+        name:worker_name,
+    };
+    App::new(config).run().await
 }

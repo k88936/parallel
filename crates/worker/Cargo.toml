@@ -26,3 +26,5 @@ nix.workspace = true
 git2.workspace = true
 sha2 = "0.10"
 backoff.workspace = true
+xtra.workspace = true
+hostname.workspace = true
