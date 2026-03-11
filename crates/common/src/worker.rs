@@ -74,6 +74,18 @@ pub struct ResourceMonitor {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct WorkerSummary {
+    #[ts(type = "string")]
+    pub id: Uuid,
+    pub name: String,
+    pub status: WorkerStatus,
+    #[ts(as = "String")]
+    pub last_heartbeat: DateTime<Utc>,
+    pub current_task_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct WorkerInfo {
     #[ts(type = "string")]
     pub id: Uuid,

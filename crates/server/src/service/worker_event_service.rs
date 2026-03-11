@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
 
-use parallel_common::{Alert, ReviewData, TaskStatus, WorkerEvent};
+use parallel_common::{Alert, ResourceMonitor, ReviewData, TaskStatus, WorkerEvent};
 
 use crate::errors::ServerResult;
 use crate::service::task_service::TaskServiceTrait;
@@ -14,6 +14,7 @@ pub struct EventProcessor {
     task_service: Arc<dyn TaskServiceTrait>,
     worker_service: Arc<dyn WorkerServiceTrait>,
     alert_service: AlertService,
+    worker_resources: Arc<dashmap::DashMap<Uuid, ResourceMonitor>>,
 }
 
 impl EventProcessor {
@@ -21,11 +22,13 @@ impl EventProcessor {
         task_service: Arc<dyn TaskServiceTrait>,
         worker_service: Arc<dyn WorkerServiceTrait>,
         alert_service: AlertService,
+        worker_resources: Arc<dashmap::DashMap<Uuid, ResourceMonitor>>,
     ) -> Self {
         Self {
             task_service,
             worker_service,
             alert_service,
+            worker_resources,
         }
     }
 }
@@ -134,6 +137,7 @@ impl EventProcessorTrait for EventProcessor {
                         disk = %resources.disk_usage_percent,
                         "Worker resource monitor"
                     );
+                    self.worker_resources.insert(*worker_id, resources);
                 }
             }
         }

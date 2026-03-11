@@ -43,10 +43,12 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
     let project_service = Arc::new(ProjectService::new(project_repository));
     let message_broker = MessageBrokerServer::new();
     let alert_service = AlertService::new();
+    let worker_resources = Arc::new(dashmap::DashMap::new());
     let event_processor = Arc::new(EventProcessor::new(
         task_service.clone(),
         worker_service.clone(),
         alert_service.clone(),
+        worker_resources.clone(),
     ));
 
     let state = AppState::new(
@@ -56,6 +58,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         event_processor,
         message_broker.clone(),
         alert_service.clone(),
+        worker_resources.clone(),
     );
 
     let heartbeat_timeout: i64 = std::env::var("HEARTBEAT_TIMEOUT_SECONDS")
@@ -114,6 +117,8 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/workers/register", post(worker::register_worker))
         .route("/api/workers/ws", get(worker::worker_websocket))
         .route("/api/workers", get(worker::list_workers))
+        .route("/api/workers/{id}/info", get(worker::get_worker_info))
+        .route("/api/workers/{id}/resources", get(worker::get_worker_resources))
         .layer(from_fn(add_correlation_header))
         .layer(SetRequestIdLayer::new(
             axum::http::header::HeaderName::from_static("x-request-id"),

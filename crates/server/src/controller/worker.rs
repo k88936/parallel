@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{State, ws::{WebSocketUpgrade}},
+    extract::{State, ws::{WebSocketUpgrade}, Path},
     http::{HeaderMap, header::AUTHORIZATION},
     response::Response,
 };
@@ -144,7 +144,7 @@ pub async fn register_worker(
 pub async fn list_workers(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-) -> ApiResult<Json<Vec<WorkerInfo>>> {
+) -> ApiResult<Json<Vec<WorkerSummary>>> {
     let correlation_id = request_id
         .header_value()
         .to_str()
@@ -161,5 +161,63 @@ pub async fn list_workers(
             .with_correlation_id(correlation_id.unwrap_or_default())
     })?;
 
-    Ok(Json(workers))
+    let summaries: Vec<WorkerSummary> = workers
+        .into_iter()
+        .map(|w| WorkerSummary {
+            id: w.id,
+            name: w.name,
+            status: w.status,
+            last_heartbeat: w.last_heartbeat,
+            current_task_count: w.current_tasks.len(),
+        })
+        .collect();
+
+    Ok(Json(summaries))
+}
+
+pub async fn get_worker_info(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path(worker_id): Path<Uuid>,
+) -> ApiResult<Json<WorkerInfo>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let worker = state.worker_service.get(&worker_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            worker_id = %worker_id,
+            error = %e,
+            "Failed to get worker info"
+        );
+        ErrorResponse::new(ErrorCode::WorkerNotFound, "Worker not found")
+            .with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(worker))
+}
+
+pub async fn get_worker_resources(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path(worker_id): Path<Uuid>,
+) -> ApiResult<Json<ResourceMonitor>> {
+    let _correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let resources = state
+        .worker_resources
+        .get(&worker_id)
+        .map(|r| r.clone())
+        .ok_or_else(|| {
+            ErrorResponse::new(ErrorCode::WorkerNotFound, "Worker resources not found")
+        })?;
+
+    Ok(Json(resources))
 }

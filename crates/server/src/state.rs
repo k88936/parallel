@@ -1,4 +1,7 @@
+use dashmap::DashMap;
+use parallel_common::ResourceMonitor;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::service::alert_service::AlertService;
 use crate::service::project_service::ProjectServiceTrait;
@@ -15,6 +18,7 @@ pub struct AppState {
     pub event_processor: Arc<dyn EventProcessorTrait>,
     pub message_broker: Arc<MessageBrokerServer>,
     pub alert_service: AlertService,
+    pub worker_resources: Arc<DashMap<Uuid, ResourceMonitor>>,
 }
 
 impl AppState {
@@ -25,6 +29,7 @@ impl AppState {
         event_processor: Arc<dyn EventProcessorTrait>,
         message_broker: MessageBrokerServer,
         alert_service: AlertService,
+        worker_resources: Arc<DashMap<Uuid, ResourceMonitor>>,
     ) -> Self {
         Self {
             task_service,
@@ -33,6 +38,7 @@ impl AppState {
             event_processor,
             message_broker: Arc::new(message_broker),
             alert_service,
+            worker_resources,
         }
     }
 }
