@@ -13,17 +13,14 @@ use uuid::Uuid;
 #[ts(export)]
 pub struct CreateTaskRequest {
     pub title: String,
-    pub repo_url: Option<String>,
-    pub repo_ref: Option<String>,
+    pub repo_ref: String,
     pub description: String,
     pub base_branch: Option<String>,
     pub target_branch: Option<String>,
     pub priority: Option<TaskPriority>,
-    pub ssh_key: Option<String>,
-    pub ssh_key_ref: Option<String>,
+    pub ssh_key_ref: String,
     pub max_execution_time: Option<i64>,
-    #[ts(optional)]
-    pub project_id: Option<String>,
+    pub project_id: String,
     #[serde(default)]
     pub required_labels: HashMap<String, String>,
 }

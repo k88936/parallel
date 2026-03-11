@@ -32,7 +32,8 @@ pub async fn create_task(
     let priority = payload.priority.unwrap_or_default();
     let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
-    let (repo_url, ssh_key) = if let Some(ref project_id) = payload.project_id {
+    let (repo_url, ssh_key) = {
+        let project_id: &str = payload.project_id.as_str();
         let project = state.project_service.get(project_id).await.map_err(|e| {
             tracing::error!(
                 correlation_id = ?correlation_id,
@@ -45,7 +46,8 @@ pub async fn create_task(
                 .with_correlation_id(correlation_id.unwrap_or_default())
         })?;
 
-        let repo_url = if let Some(ref repo_ref) = payload.repo_ref {
+        let repo_url = {
+            let repo_ref: &str = payload.project_id.as_str();
             project
                 .repos
                 .iter()
@@ -58,17 +60,10 @@ pub async fn create_task(
                     )
                     .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
-        } else if let Some(ref url) = payload.repo_url {
-            url.clone()
-        } else {
-            return Err(ErrorResponse::new(
-                ErrorCode::TaskCreationFailed,
-                "Either repo_url or repo_ref must be provided",
-            )
-            .with_correlation_id(correlation_id.unwrap_or_default()));
         };
 
-        let ssh_key = if let Some(ref key_ref) = payload.ssh_key_ref {
+        let ssh_key = {
+            let key_ref = payload.ssh_key_ref.as_str();
             project
                 .ssh_keys
                 .iter()
@@ -81,32 +76,7 @@ pub async fn create_task(
                     )
                     .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
-        } else if let Some(ref key) = payload.ssh_key {
-            key.clone()
-        } else {
-            return Err(ErrorResponse::new(
-                ErrorCode::TaskCreationFailed,
-                "Either ssh_key or ssh_key_ref must be provided",
-            )
-            .with_correlation_id(correlation_id.unwrap_or_default()));
         };
-
-        (repo_url, ssh_key)
-    } else {
-        let repo_url = payload.repo_url.ok_or_else(|| {
-            ErrorResponse::new(
-                ErrorCode::TaskCreationFailed,
-                "repo_url is required when project_id is not provided",
-            )
-            .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
-        let ssh_key = payload.ssh_key.ok_or_else(|| {
-            ErrorResponse::new(
-                ErrorCode::TaskCreationFailed,
-                "ssh_key is required when project_id is not provided",
-            )
-            .with_correlation_id(correlation_id.unwrap_or_default())
-        })?;
         (repo_url, ssh_key)
     };
 

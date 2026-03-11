@@ -30,7 +30,7 @@ impl TaskServiceTrait for TaskService {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<String>,
+        project_id: String,
         required_labels: HashMap<String, String>,
     ) -> Result<Uuid> {
         let task_id = Uuid::new_v4();
@@ -242,7 +242,7 @@ pub trait TaskServiceTrait: Send + Sync {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<String>,
+        project_id: String,
         required_labels: HashMap<String, String>,
     ) -> Result<Uuid>;
 

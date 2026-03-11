@@ -98,7 +98,7 @@ pub trait TaskRepositoryTrait: Send + Sync {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<String>,
+        project_id: String,
         required_labels: HashMap<String, String>,
     ) -> Result<()>;
 
@@ -157,7 +157,7 @@ impl TaskRepositoryTrait for TaskRepository {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<String>,
+        project_id: String,
         required_labels: HashMap<String, String>,
     ) -> Result<()> {
         let now = Utc::now();

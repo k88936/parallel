@@ -26,7 +26,7 @@ CREATE TABLE `tasks`(
 	`review_data_json` TEXT,
 	`ssh_key` TEXT NOT NULL,
 	`max_execution_time` BIGINT NOT NULL,
-	`project_id` TEXT,
+	`project_id` TEXT NOT NULL ,
 	`required_labels_json` TEXT NOT NULL
 );
 

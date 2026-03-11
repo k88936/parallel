@@ -14,7 +14,7 @@ diesel::table! {
         review_data_json -> Nullable<Text>,
         ssh_key -> Text,
         max_execution_time -> BigInt,
-        project_id -> Nullable<Text>,
+        project_id -> Text,
         required_labels_json -> Text,
     }
 }

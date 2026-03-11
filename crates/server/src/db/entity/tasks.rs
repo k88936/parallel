@@ -22,7 +22,7 @@ pub struct Task {
     pub review_data_json: Option<String>,
     pub ssh_key: String,
     pub max_execution_time: i64,
-    pub project_id: Option<String>,
+    pub project_id: String,
     pub required_labels_json: String,
 }
 
@@ -43,7 +43,7 @@ pub struct NewTask {
     pub review_data_json: Option<String>,
     pub ssh_key: String,
     pub max_execution_time: i64,
-    pub project_id: Option<String>,
+    pub project_id: String,
     pub required_labels_json: String,
 }
 
@@ -62,7 +62,7 @@ pub struct TaskChangeset {
     pub review_data_json: Option<Option<String>>,
     pub ssh_key: Option<String>,
     pub max_execution_time: Option<i64>,
-    pub project_id: Option<Option<String>>,
+    pub project_id: Option<String>,
     pub required_labels_json: Option<String>,
 }
 
@@ -77,9 +77,4 @@ impl Task {
             .and_then(|s| Uuid::parse_str(s).ok())
     }
 
-    pub fn get_project_id_uuid(&self) -> Option<Uuid> {
-        self.project_id
-            .as_ref()
-            .and_then(|s| Uuid::parse_str(s).ok())
-    }
 }
