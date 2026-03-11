@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum TaskStatus {
     Created,
     Queued,
@@ -48,8 +50,9 @@ impl TaskStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum TaskPriority {
     Low = 0,
     Normal = 1,
@@ -79,8 +82,10 @@ impl Default for TaskPriority {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Task {
+    #[ts(type = "string")]
     pub id: Uuid,
     pub title: String,
     pub repo_url: String,
@@ -89,8 +94,11 @@ pub struct Task {
     pub target_branch: String,
     pub status: TaskStatus,
     pub priority: TaskPriority,
+    #[ts(as = "String")]
     pub created_at: DateTime<Utc>,
+    #[ts(as = "String")]
     pub updated_at: DateTime<Utc>,
+    #[ts(optional, type = "string")]
     pub claimed_by: Option<Uuid>,
     pub ssh_key: String,
     pub max_execution_time: i64,

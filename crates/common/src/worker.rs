@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum WorkerStatus {
     Idle,
     Busy,
@@ -33,7 +35,8 @@ impl WorkerStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct WorkerCapabilities {
     pub has_git: bool,
     pub available_agents: Vec<String>,
@@ -57,7 +60,8 @@ impl Default for WorkerCapabilities {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ResourceMonitor {
     pub cpu_usage_percent: f32,
     pub memory_usage_percent: f32,
@@ -68,13 +72,17 @@ pub struct ResourceMonitor {
     pub disk_total_gb: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct WorkerInfo {
+    #[ts(type = "string")]
     pub id: Uuid,
     pub token: String,
     pub name: String,
     pub status: WorkerStatus,
+    #[ts(as = "String")]
     pub last_heartbeat: DateTime<Utc>,
+    #[ts(type = "string[]")]
     pub current_tasks: Vec<Uuid>,
     pub capabilities: WorkerCapabilities,
     pub max_concurrent: usize,
