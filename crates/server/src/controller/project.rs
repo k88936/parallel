@@ -93,7 +93,7 @@ pub async fn list_projects(
 pub async fn get_project(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    Path(project_id): Path<Uuid>,
+    Path(project_id): Path<String>,
 ) -> ApiResult<Json<Project>> {
     let correlation_id = request_id
         .header_value()
@@ -127,7 +127,7 @@ pub async fn get_project(
 pub async fn update_project(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    Path(project_id): Path<Uuid>,
+    Path(project_id): Path<String>,
     Json(payload): Json<UpdateProjectRequest>,
 ) -> ApiResult<Json<Project>> {
     let correlation_id = request_id
@@ -157,7 +157,7 @@ pub async fn update_project(
 pub async fn delete_project(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    Path(project_id): Path<Uuid>,
+    Path(project_id): Path<String>,
 ) -> ApiResult<StatusCode> {
     let correlation_id = request_id
         .header_value()
@@ -211,7 +211,7 @@ pub async fn get_root_project(
 pub async fn get_project_children(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    Path(project_id): Path<Uuid>,
+    Path(project_id): Path<String>,
 ) -> ApiResult<Json<Vec<Project>>> {
     let correlation_id = request_id
         .header_value()

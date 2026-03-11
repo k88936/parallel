@@ -18,6 +18,10 @@ impl ProjectService {
     }
 }
 
+fn generate_project_id() -> String {
+    Uuid::new_v4().to_string()
+}
+
 #[async_trait]
 impl ProjectServiceTrait for ProjectService {
     async fn create(
@@ -25,24 +29,24 @@ impl ProjectServiceTrait for ProjectService {
         name: String,
         repos: Vec<RepoConfig>,
         ssh_keys: Vec<SshKeyConfig>,
-        parent_id: Option<Uuid>,
-    ) -> Result<Uuid> {
-        let parent = match parent_id {
+        parent_id: Option<String>,
+    ) -> Result<String> {
+        let parent = match parent_id.as_ref() {
             Some(pid) => {
-                if is_root_project_id(&pid) {
+                if is_root_project_id(pid) {
                     None
                 } else {
-                    Some(self.repository.find_by_id(&pid).await?)
+                    Some(self.repository.find_by_id(pid).await?)
                 }
             }
             None => None,
         };
 
-        let project_id = Uuid::new_v4();
+        let project_id = generate_project_id();
         let effective_parent_id = parent.map(|p| p.id).or(parent_id);
 
         self.repository.create(
-            project_id,
+            project_id.clone(),
             name,
             &repos,
             &ssh_keys,
@@ -52,12 +56,12 @@ impl ProjectServiceTrait for ProjectService {
         Ok(project_id)
     }
 
-    async fn get(&self, project_id: &Uuid) -> ServerResult<Project> {
+    async fn get(&self, project_id: &str) -> ServerResult<Project> {
         self.repository.find_by_id(project_id).await
     }
 
     async fn get_root(&self) -> ServerResult<Project> {
-        self.repository.find_by_id(&ROOT_PROJECT_ID).await
+        self.repository.find_by_id(ROOT_PROJECT_ID).await
     }
 
     async fn list(&self, params: ProjectListParams) -> Result<ProjectListResult> {
@@ -88,22 +92,22 @@ impl ProjectServiceTrait for ProjectService {
 
     async fn update(
         &self,
-        project_id: &Uuid,
+        project_id: &str,
         name: Option<String>,
         repos: Option<Vec<RepoConfig>>,
         ssh_keys: Option<Vec<SshKeyConfig>>,
-        parent_id: Option<Option<Uuid>>,
+        parent_id: Option<Option<String>>,
     ) -> ServerResult<Project> {
         if is_root_project_id(project_id) && parent_id.is_some() {
             return Err(ServerError::InvalidOperation("Cannot change parent of root project".to_string()));
         }
 
-        if let Some(Some(pid)) = parent_id {
-            if pid == *project_id {
+        if let Some(Some(pid)) = parent_id.as_ref() {
+            if pid == project_id {
                 return Err(ServerError::InvalidOperation("Project cannot be its own parent".to_string()));
             }
-            if !is_root_project_id(&pid) {
-                self.repository.find_by_id(&pid).await?;
+            if !is_root_project_id(pid) {
+                self.repository.find_by_id(pid).await?;
             }
         }
 
@@ -116,7 +120,7 @@ impl ProjectServiceTrait for ProjectService {
         ).await
     }
 
-    async fn delete(&self, project_id: &Uuid) -> ServerResult<()> {
+    async fn delete(&self, project_id: &str) -> ServerResult<()> {
         if is_root_project_id(project_id) {
             return Err(ServerError::InvalidOperation("Cannot delete root project".to_string()));
         }
@@ -131,16 +135,16 @@ impl ProjectServiceTrait for ProjectService {
         self.repository.delete(project_id).await
     }
 
-    async fn get_children(&self, project_id: &Uuid) -> Result<Vec<Project>> {
+    async fn get_children(&self, project_id: &str) -> Result<Vec<Project>> {
         self.repository.find_children(project_id).await
     }
 
-    async fn get_repo(&self, project_id: &Uuid, repo_name: &str) -> ServerResult<Option<RepoConfig>> {
+    async fn get_repo(&self, project_id: &str, repo_name: &str) -> ServerResult<Option<RepoConfig>> {
         let project = self.repository.find_by_id(project_id).await?;
         Ok(project.repos.into_iter().find(|r| r.name == repo_name))
     }
 
-    async fn get_ssh_key(&self, project_id: &Uuid, key_name: &str) -> ServerResult<Option<SshKeyConfig>> {
+    async fn get_ssh_key(&self, project_id: &str, key_name: &str) -> ServerResult<Option<SshKeyConfig>> {
         let project = self.repository.find_by_id(project_id).await?;
         Ok(project.ssh_keys.into_iter().find(|k| k.name == key_name))
     }
@@ -165,10 +169,10 @@ pub trait ProjectServiceTrait: Send + Sync {
         name: String,
         repos: Vec<RepoConfig>,
         ssh_keys: Vec<SshKeyConfig>,
-        parent_id: Option<Uuid>,
-    ) -> Result<Uuid>;
+        parent_id: Option<String>,
+    ) -> Result<String>;
 
-    async fn get(&self, project_id: &Uuid) -> ServerResult<Project>;
+    async fn get(&self, project_id: &str) -> ServerResult<Project>;
 
     async fn get_root(&self) -> ServerResult<Project>;
 
@@ -176,18 +180,18 @@ pub trait ProjectServiceTrait: Send + Sync {
 
     async fn update(
         &self,
-        project_id: &Uuid,
+        project_id: &str,
         name: Option<String>,
         repos: Option<Vec<RepoConfig>>,
         ssh_keys: Option<Vec<SshKeyConfig>>,
-        parent_id: Option<Option<Uuid>>,
+        parent_id: Option<Option<String>>,
     ) -> ServerResult<Project>;
 
-    async fn delete(&self, project_id: &Uuid) -> ServerResult<()>;
+    async fn delete(&self, project_id: &str) -> ServerResult<()>;
 
-    async fn get_children(&self, project_id: &Uuid) -> Result<Vec<Project>>;
+    async fn get_children(&self, project_id: &str) -> Result<Vec<Project>>;
 
-    async fn get_repo(&self, project_id: &Uuid, repo_name: &str) -> ServerResult<Option<RepoConfig>>;
+    async fn get_repo(&self, project_id: &str, repo_name: &str) -> ServerResult<Option<RepoConfig>>;
 
-    async fn get_ssh_key(&self, project_id: &Uuid, key_name: &str) -> ServerResult<Option<SshKeyConfig>>;
+    async fn get_ssh_key(&self, project_id: &str, key_name: &str) -> ServerResult<Option<SshKeyConfig>>;
 }

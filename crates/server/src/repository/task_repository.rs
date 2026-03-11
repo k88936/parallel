@@ -98,7 +98,7 @@ pub trait TaskRepositoryTrait: Send + Sync {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<Uuid>,
+        project_id: Option<String>,
         required_labels: HashMap<String, String>,
     ) -> Result<()>;
 
@@ -113,7 +113,7 @@ pub trait TaskRepositoryTrait: Send + Sync {
         search: Option<&str>,
         created_after: Option<chrono::DateTime<Utc>>,
         created_before: Option<chrono::DateTime<Utc>>,
-        project_id: Option<Uuid>,
+        project_id: Option<String>,
         sort_by: &str,
         sort_direction: &str,
         cursor: Option<&str>,
@@ -157,7 +157,7 @@ impl TaskRepositoryTrait for TaskRepository {
         priority: TaskPriority,
         ssh_key: String,
         max_execution_time: i64,
-        project_id: Option<Uuid>,
+        project_id: Option<String>,
         required_labels: HashMap<String, String>,
     ) -> Result<()> {
         let now = Utc::now();
@@ -178,7 +178,7 @@ impl TaskRepositoryTrait for TaskRepository {
             review_data_json: None,
             ssh_key,
             max_execution_time,
-            project_id: project_id.map(|p| p.to_string()),
+            project_id,
             required_labels_json: serde_json::to_string(&required_labels)?,
         };
 
@@ -209,7 +209,7 @@ impl TaskRepositoryTrait for TaskRepository {
         search: Option<&str>,
         created_after: Option<chrono::DateTime<Utc>>,
         created_before: Option<chrono::DateTime<Utc>>,
-        project_id: Option<Uuid>,
+        project_id: Option<String>,
         sort_by: &str,
         sort_direction: &str,
         cursor: Option<&str>,
@@ -252,7 +252,7 @@ impl TaskRepositoryTrait for TaskRepository {
         }
 
         if let Some(pid) = project_id {
-            query = query.filter(tasks_schema::project_id.eq(pid.to_string()));
+            query = query.filter(tasks_schema::project_id.eq(pid));
         }
 
         if let Some(c) = cursor {

@@ -32,8 +32,8 @@ pub async fn create_task(
     let priority = payload.priority.unwrap_or_default();
     let max_execution_time = payload.max_execution_time.unwrap_or(3600);
 
-    let (repo_url, ssh_key) = if let Some(project_id) = payload.project_id {
-        let project = state.project_service.get(&project_id).await.map_err(|e| {
+    let (repo_url, ssh_key) = if let Some(ref project_id) = payload.project_id {
+        let project = state.project_service.get(project_id).await.map_err(|e| {
             tracing::error!(
                 correlation_id = ?correlation_id,
                 project_id = %project_id,

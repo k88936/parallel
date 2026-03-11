@@ -22,8 +22,8 @@ pub struct CreateTaskRequest {
     pub ssh_key: Option<String>,
     pub ssh_key_ref: Option<String>,
     pub max_execution_time: Option<i64>,
-    #[ts(optional, type = "string")]
-    pub project_id: Option<Uuid>,
+    #[ts(optional)]
+    pub project_id: Option<String>,
     #[serde(default)]
     pub required_labels: HashMap<String, String>,
 }
@@ -60,8 +60,8 @@ pub struct ListTasksQuery {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
-    #[ts(optional, type = "string")]
-    pub project_id: Option<Uuid>,
+    #[ts(optional)]
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -92,15 +92,14 @@ pub struct CreateProjectRequest {
     pub name: String,
     pub repos: Vec<RepoConfig>,
     pub ssh_keys: Vec<SshKeyConfig>,
-    #[ts(optional, type = "string")]
-    pub parent_id: Option<Uuid>,
+    #[ts(optional)]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateProjectResponse {
-    #[ts(type = "string")]
-    pub project_id: Uuid,
+    pub project_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -125,8 +124,8 @@ pub struct UpdateProjectRequest {
     pub name: Option<String>,
     pub repos: Option<Vec<RepoConfig>>,
     pub ssh_keys: Option<Vec<SshKeyConfig>>,
-    #[ts(optional, type = "string")]
-    pub parent_id: Option<Option<Uuid>>,
+    #[ts(optional)]
+    pub parent_id: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub enum ServerError {
     TaskNotFound(Uuid),
     WorkerNotFound(Uuid),
-    ProjectNotFound(Uuid),
+    ProjectNotFound(String),
     InvalidToken,
     InvalidStatus(String),
     InvalidOperation(String),

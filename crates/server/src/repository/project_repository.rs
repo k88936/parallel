@@ -4,7 +4,6 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use diesel::sqlite::SqliteConnection;
-use uuid::Uuid;
 
 use parallel_common::{Project, RepoConfig, SshKeyConfig};
 
@@ -30,16 +29,15 @@ impl ProjectRepository {
 fn db_project_to_project(p: DbProject) -> Project {
     let repos: Vec<RepoConfig> = serde_json::from_str(&p.repos_json).unwrap_or_default();
     let ssh_keys: Vec<SshKeyConfig> = serde_json::from_str(&p.ssh_keys_json).unwrap_or_default();
-    let parent_id = p.get_parent_uuid();
     
     Project {
-        id: p.get_uuid(),
+        id: p.id,
         name: p.name,
         repos,
         ssh_keys,
         created_at: chrono::DateTime::from_naive_utc_and_offset(p.created_at, Utc),
         updated_at: chrono::DateTime::from_naive_utc_and_offset(p.updated_at, Utc),
-        parent_id,
+        parent_id: p.parent_id,
     }
 }
 
@@ -47,14 +45,14 @@ fn db_project_to_project(p: DbProject) -> Project {
 pub trait ProjectRepositoryTrait: Send + Sync {
     async fn create(
         &self,
-        id: Uuid,
+        id: String,
         name: String,
         repos: &Vec<RepoConfig>,
         ssh_keys: &Vec<SshKeyConfig>,
-        parent_id: Option<Uuid>,
+        parent_id: Option<String>,
     ) -> Result<()>;
 
-    async fn find_by_id(&self, project_id: &Uuid) -> ServerResult<Project>;
+    async fn find_by_id(&self, project_id: &str) -> ServerResult<Project>;
 
     async fn find_many(
         &self,
@@ -67,38 +65,38 @@ pub trait ProjectRepositoryTrait: Send + Sync {
 
     async fn update(
         &self,
-        project_id: &Uuid,
+        project_id: &str,
         name: Option<String>,
         repos: Option<&Vec<RepoConfig>>,
         ssh_keys: Option<&Vec<SshKeyConfig>>,
-        parent_id: Option<Option<Uuid>>,
+        parent_id: Option<Option<String>>,
     ) -> ServerResult<Project>;
 
-    async fn delete(&self, project_id: &Uuid) -> ServerResult<()>;
+    async fn delete(&self, project_id: &str) -> ServerResult<()>;
 
-    async fn find_children(&self, parent_id: &Uuid) -> Result<Vec<Project>>;
+    async fn find_children(&self, parent_id: &str) -> Result<Vec<Project>>;
 }
 
 #[async_trait]
 impl ProjectRepositoryTrait for ProjectRepository {
     async fn create(
         &self,
-        id: Uuid,
+        id: String,
         name: String,
         repos: &Vec<RepoConfig>,
         ssh_keys: &Vec<SshKeyConfig>,
-        parent_id: Option<Uuid>,
+        parent_id: Option<String>,
     ) -> Result<()> {
         let now = Utc::now().naive_utc();
 
         let new_project = NewProject {
-            id: id.to_string(),
+            id,
             name,
             repos_json: serde_json::to_string(repos)?,
             ssh_keys_json: serde_json::to_string(ssh_keys)?,
             created_at: now,
             updated_at: now,
-            parent_id: parent_id.map(|p| p.to_string()),
+            parent_id,
         };
 
         let mut conn = self.get_conn()?;
@@ -109,12 +107,12 @@ impl ProjectRepositoryTrait for ProjectRepository {
         Ok(())
     }
 
-    async fn find_by_id(&self, project_id: &Uuid) -> ServerResult<Project> {
+    async fn find_by_id(&self, project_id: &str) -> ServerResult<Project> {
         let mut conn = self.get_conn()?;
         let project = projects_schema::table
-            .filter(projects_schema::id.eq(project_id.to_string()))
+            .filter(projects_schema::id.eq(project_id))
             .first::<DbProject>(&mut conn)
-            .map_err(|_| ServerError::ProjectNotFound(*project_id))?;
+            .map_err(|_| ServerError::ProjectNotFound(project_id.to_string()))?;
 
         Ok(db_project_to_project(project))
     }
@@ -160,20 +158,20 @@ impl ProjectRepositoryTrait for ProjectRepository {
 
     async fn update(
         &self,
-        project_id: &Uuid,
+        project_id: &str,
         name: Option<String>,
         repos: Option<&Vec<RepoConfig>>,
         ssh_keys: Option<&Vec<SshKeyConfig>>,
-        parent_id: Option<Option<Uuid>>,
+        parent_id: Option<Option<String>>,
     ) -> ServerResult<Project> {
         let now = Utc::now().naive_utc();
 
         let mut conn = self.get_conn()?;
         
         let project = projects_schema::table
-            .filter(projects_schema::id.eq(project_id.to_string()))
+            .filter(projects_schema::id.eq(project_id))
             .first::<DbProject>(&mut conn)
-            .map_err(|_| ServerError::ProjectNotFound(*project_id))?;
+            .map_err(|_| ServerError::ProjectNotFound(project_id.to_string()))?;
 
         let new_name = name.unwrap_or(project.name);
         let new_repos_json = match repos {
@@ -184,10 +182,10 @@ impl ProjectRepositoryTrait for ProjectRepository {
             Some(k) => serde_json::to_string(k)?,
             None => project.ssh_keys_json,
         };
-        let new_parent_id = parent_id.map(|p| p.map(|id| id.to_string())).unwrap_or(project.parent_id);
+        let new_parent_id = parent_id.unwrap_or(project.parent_id);
 
         diesel::update(projects_schema::table)
-            .filter(projects_schema::id.eq(project_id.to_string()))
+            .filter(projects_schema::id.eq(project_id))
             .set((
                 projects_schema::name.eq(new_name),
                 projects_schema::repos_json.eq(new_repos_json),
@@ -198,30 +196,30 @@ impl ProjectRepositoryTrait for ProjectRepository {
             .execute(&mut conn)?;
 
         let project = projects_schema::table
-            .filter(projects_schema::id.eq(project_id.to_string()))
+            .filter(projects_schema::id.eq(project_id))
             .first::<DbProject>(&mut conn)?;
 
         Ok(db_project_to_project(project))
     }
 
-    async fn delete(&self, project_id: &Uuid) -> ServerResult<()> {
+    async fn delete(&self, project_id: &str) -> ServerResult<()> {
         let mut conn = self.get_conn()?;
         let rows_affected = diesel::delete(
-            projects_schema::table.filter(projects_schema::id.eq(project_id.to_string()))
+            projects_schema::table.filter(projects_schema::id.eq(project_id))
         )
         .execute(&mut conn)?;
 
         if rows_affected == 0 {
-            return Err(ServerError::ProjectNotFound(*project_id));
+            return Err(ServerError::ProjectNotFound(project_id.to_string()));
         }
 
         Ok(())
     }
 
-    async fn find_children(&self, parent_id: &Uuid) -> Result<Vec<Project>> {
+    async fn find_children(&self, parent_id: &str) -> Result<Vec<Project>> {
         let mut conn = self.get_conn()?;
         let db_projects = projects_schema::table
-            .filter(projects_schema::parent_id.eq(parent_id.to_string()))
+            .filter(projects_schema::parent_id.eq(parent_id))
             .load::<DbProject>(&mut conn)?;
 
         Ok(db_projects
