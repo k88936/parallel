@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use parallel_common::{is_root_project_id, Project, RepoConfig, SshKeyConfig, ROOT_PROJECT_ID};
+use parallel_common::{Project, RepoConfig, SshKeyConfig};
 
 use crate::errors::{ServerError, ServerResult};
 use crate::repository::{ProjectRepository, ProjectRepositoryTrait};
@@ -31,26 +31,18 @@ impl ProjectServiceTrait for ProjectService {
         ssh_keys: Vec<SshKeyConfig>,
         parent_id: Option<String>,
     ) -> Result<String> {
-        let parent = match parent_id.as_ref() {
-            Some(pid) => {
-                if is_root_project_id(pid) {
-                    None
-                } else {
-                    Some(self.repository.find_by_id(pid).await?)
-                }
-            }
-            None => None,
-        };
+        if let Some(pid) = &parent_id {
+            self.repository.find_by_id(pid).await?;
+        }
 
         let project_id = generate_project_id();
-        let effective_parent_id = parent.map(|p| p.id).or(parent_id);
 
         self.repository.create(
             project_id.clone(),
             name,
             &repos,
             &ssh_keys,
-            effective_parent_id,
+            parent_id,
         ).await?;
 
         Ok(project_id)
@@ -58,10 +50,6 @@ impl ProjectServiceTrait for ProjectService {
 
     async fn get(&self, project_id: &str) -> ServerResult<Project> {
         self.repository.find_by_id(project_id).await
-    }
-
-    async fn get_root(&self) -> ServerResult<Project> {
-        self.repository.find_by_id(ROOT_PROJECT_ID).await
     }
 
     async fn list(&self, params: ProjectListParams) -> Result<ProjectListResult> {
@@ -98,17 +86,11 @@ impl ProjectServiceTrait for ProjectService {
         ssh_keys: Option<Vec<SshKeyConfig>>,
         parent_id: Option<Option<String>>,
     ) -> ServerResult<Project> {
-        if is_root_project_id(project_id) && parent_id.is_some() {
-            return Err(ServerError::InvalidOperation("Cannot change parent of root project".to_string()));
-        }
-
         if let Some(Some(pid)) = parent_id.as_ref() {
             if pid == project_id {
                 return Err(ServerError::InvalidOperation("Project cannot be its own parent".to_string()));
             }
-            if !is_root_project_id(pid) {
-                self.repository.find_by_id(pid).await?;
-            }
+            self.repository.find_by_id(pid).await?;
         }
 
         self.repository.update(
@@ -121,10 +103,6 @@ impl ProjectServiceTrait for ProjectService {
     }
 
     async fn delete(&self, project_id: &str) -> ServerResult<()> {
-        if is_root_project_id(project_id) {
-            return Err(ServerError::InvalidOperation("Cannot delete root project".to_string()));
-        }
-
         let children = self.repository.find_children(project_id).await
             .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
         
@@ -173,8 +151,6 @@ pub trait ProjectServiceTrait: Send + Sync {
     ) -> Result<String>;
 
     async fn get(&self, project_id: &str) -> ServerResult<Project>;
-
-    async fn get_root(&self) -> ServerResult<Project>;
 
     async fn list(&self, params: ProjectListParams) -> Result<ProjectListResult>;
 

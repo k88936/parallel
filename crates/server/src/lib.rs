@@ -106,7 +106,7 @@ pub async fn run_server(database_url: &str, port: u16) -> Result<()> {
         .route("/api/tasks/{id}/retry", post(task::retry_task))
         .route("/api/projects", post(project::create_project))
         .route("/api/projects", get(project::list_projects))
-        .route("/api/projects/root", get(project::get_root_project))
+        
         .route("/api/projects/{id}", get(project::get_project))
         .route("/api/projects/{id}", put(project::update_project))
         .route("/api/projects/{id}", delete(project::delete_project))

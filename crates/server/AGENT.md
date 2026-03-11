@@ -83,3 +83,10 @@ src/
 - `HEARTBEAT_CHECK_INTERVAL_SECONDS`: Check interval (default: 10)
 - `ORPHAN_CHECK_INTERVAL_SECONDS`: Orphan check interval (default: 60)
 - `TASK_SCHEDULER_INTERVAL_SECONDS`: Scheduler interval (default: 2)
+
+
+## to use diesel cli
+```shell
+cd current-dir
+export DATABASE_URL="sqlite://./data.db?mode=rwc" diesel ...
+```

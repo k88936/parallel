@@ -4,12 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::schema::projects;
 
-pub const ROOT_PROJECT_ID: &str = "root";
-
-pub fn is_root_project_id(id: &str) -> bool {
-    id == ROOT_PROJECT_ID
-}
-
 #[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = projects)]
 pub struct Project {
@@ -42,10 +36,4 @@ pub struct ProjectChangeset {
     pub ssh_keys_json: Option<String>,
     pub updated_at: Option<NaiveDateTime>,
     pub parent_id: Option<Option<String>>,
-}
-
-impl Project {
-    pub fn is_root(&self) -> bool {
-        self.id == ROOT_PROJECT_ID
-    }
 }
