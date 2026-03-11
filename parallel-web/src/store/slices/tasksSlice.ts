@@ -7,6 +7,7 @@ import type {
     TaskPriority,
     ReviewData,
     SubmitFeedbackRequest,
+    CreateTaskRequest,
 } from '../../types';
 import { tasksApi } from '../../api';
 
@@ -29,6 +30,8 @@ interface TasksState {
     reviewData: Record<string, ReviewData>;
     loading: boolean;
     reviewLoading: boolean;
+    createLoading: boolean;
+    createError: string | null;
     error: string | null;
 }
 
@@ -45,6 +48,8 @@ const initialState: TasksState = {
     reviewData: {},
     loading: false,
     reviewLoading: false,
+    createLoading: false,
+    createError: null,
     error: null,
 };
 
@@ -96,6 +101,14 @@ export const submitFeedback = createAsyncThunk(
     }
 );
 
+export const createTask = createAsyncThunk(
+    'tasks/create',
+    async (data: CreateTaskRequest) => {
+        const response = await tasksApi.create(data);
+        return response;
+    }
+);
+
 const tasksSlice = createSlice({
     name: 'tasks',
     initialState,
@@ -141,6 +154,9 @@ const tasksSlice = createSlice({
         },
         clearError: (state) => {
             state.error = null;
+        },
+        clearCreateError: (state) => {
+            state.createError = null;
         },
     },
     extraReducers: (builder) => {
@@ -222,6 +238,18 @@ const tasksSlice = createSlice({
             })
             .addCase(submitFeedback.rejected, (state, action) => {
                 state.error = action.error.message || 'Failed to submit feedback';
+            })
+            .addCase(createTask.pending, (state) => {
+                state.createLoading = true;
+                state.createError = null;
+            })
+            .addCase(createTask.fulfilled, (state) => {
+                state.createLoading = false;
+                state.createError = null;
+            })
+            .addCase(createTask.rejected, (state, action) => {
+                state.createLoading = false;
+                state.createError = action.error.message || 'Failed to create task';
             });
     },
 });
@@ -236,6 +264,7 @@ export const {
     setPagination,
     setPage,
     clearError,
+    clearCreateError,
 } = tasksSlice.actions;
 
 export default tasksSlice.reducer;

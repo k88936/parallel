@@ -2,7 +2,8 @@ import {useEffect, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {selectProject, fetchProjectChildren, fetchRootProject, createProject, deleteProject, updateProject} from '../store/slices/projectsSlice';
-import type {Project, CreateProjectRequest, SshKeyConfig, RepoConfig} from '../types';
+import {createTask, clearCreateError} from '../store/slices/tasksSlice';
+import type {Project, CreateProjectRequest, SshKeyConfig, RepoConfig, CreateTaskRequest} from '../types';
 import styles from './ProjectPage.module.css';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
@@ -22,6 +23,7 @@ import Confirm from '@jetbrains/ring-ui-built/components/confirm/confirm';
 import {SubprojectDialog} from '../components/common/SubprojectDialog';
 import {SshKeyDialog} from '../components/common/SshKeyDialog';
 import {RepoDialog} from '../components/common/RepoDialog';
+import {CreateTaskDialog} from '../components/common/CreateTaskDialog';
 
 type TabId = 'overview' | 'settings' | 'repos' | 'tasks';
 
@@ -30,6 +32,7 @@ export const ProjectPage = () => {
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
     const {projects, childrenByParent, rootProjectId, loading} = useAppSelector((state) => state.projects);
+    const {createLoading, createError} = useAppSelector((state) => state.tasks);
     const [activeTab, setActiveTab] = useState<TabId>('overview');
     const [showAddDialog, setShowAddDialog] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
@@ -39,6 +42,7 @@ export const ProjectPage = () => {
     const [showRepoDialog, setShowRepoDialog] = useState(false);
     const [editingRepo, setEditingRepo] = useState<RepoConfig | null>(null);
     const [deleteRepoTarget, setDeleteRepoTarget] = useState<RepoConfig | null>(null);
+    const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
 
     const actualProjectId = projectId === 'root' ? rootProjectId : projectId;
     const project = actualProjectId ? projects[actualProjectId] : null;
@@ -151,6 +155,11 @@ export const ProjectPage = () => {
         }
     };
 
+    const handleCreateTask = async (data: CreateTaskRequest) => {
+        await dispatch(createTask(data)).unwrap();
+        setShowCreateTaskDialog(false);
+    };
+
     return (
         <div className={styles.container}>
             <div className={styles.breadcrumbWrapper}>
@@ -170,7 +179,7 @@ export const ProjectPage = () => {
 
             <div className={styles.header}>
                 <Heading level={1}>{project.name}</Heading>
-                <Button primary onClick={() => {}}>
+                <Button primary onClick={() => setShowCreateTaskDialog(true)}>
                     Draft New Task
                 </Button>
             </div>
@@ -438,6 +447,20 @@ export const ProjectPage = () => {
                 rejectLabel="Cancel"
                 onConfirm={handleDeleteRepo}
                 onReject={() => setDeleteRepoTarget(null)}
+            />
+
+            <CreateTaskDialog
+                show={showCreateTaskDialog}
+                projectId={actualProjectId!}
+                repos={project.repos}
+                sshKeys={project.ssh_keys}
+                onClose={() => {
+                    setShowCreateTaskDialog(false);
+                    dispatch(clearCreateError());
+                }}
+                onSubmit={handleCreateTask}
+                loading={createLoading}
+                error={createError}
             />
         </div>
     );

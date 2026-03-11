@@ -22,6 +22,8 @@ export * from './TaskListResponse';
 export * from './ReviewData';
 export * from './SubmitFeedbackRequest';
 export * from './FeedbackType';
+export * from './CreateTaskRequest';
+export * from './CreateTaskResponse';
 export * from './RetryTaskRequest';
 export * from './RetryTaskResponse';
 export * from './AgentMessage';

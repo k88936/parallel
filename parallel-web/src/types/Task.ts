@@ -2,4 +2,4 @@
 import type { TaskPriority } from "./TaskPriority";
 import type { TaskStatus } from "./TaskStatus";
 
-export type Task = { id: string, title: string, repo_url: string, description: string, base_branch: string, target_branch: string, status: TaskStatus, priority: TaskPriority, created_at: string, updated_at: string, claimed_by?: string, ssh_key: string, max_execution_time: bigint, required_labels: { [key in string]: string }, };
+export type Task = { id: string, title: string, repo_url: string, description: string, base_branch: string, target_branch: string, status: TaskStatus, priority: TaskPriority, created_at: string, updated_at: string, claimed_by?: string, ssh_key: string, max_execution_time: number, required_labels: { [key in string]: string }, };

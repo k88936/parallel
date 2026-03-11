@@ -47,7 +47,7 @@ pub async fn create_task(
         })?;
 
         let repo_url = {
-            let repo_ref: &str = payload.project_id.as_str();
+            let repo_ref: &str = payload.repo_ref.as_str();
             project
                 .repos
                 .iter()

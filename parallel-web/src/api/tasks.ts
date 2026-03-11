@@ -7,11 +7,18 @@ import type {
     SubmitFeedbackRequest,
     RetryTaskResponse,
     RetryTaskRequest,
+    CreateTaskRequest,
+    CreateTaskResponse,
 } from '../types';
 
 const TASKS_PATH = '/api/tasks';
 
 export const tasksApi = {
+    create: async (data: CreateTaskRequest): Promise<CreateTaskResponse> => {
+        const response = await apiClient.post<CreateTaskResponse>(TASKS_PATH, data);
+        return response.data;
+    },
+
     list: async (query?: ListTasksQuery): Promise<TaskListResponse> => {
         const response = await apiClient.get<TaskListResponse>(TASKS_PATH, {
             params: query,
