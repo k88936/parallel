@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import projectsReducer from './slices/projectsSlice';
 import workersReducer from './slices/workersSlice';
+import tasksReducer from './slices/tasksSlice';
 
 export const store = configureStore({
     reducer: {
         projects: projectsReducer,
         workers: workersReducer,
+        tasks: tasksReducer,
     },
 });
 
