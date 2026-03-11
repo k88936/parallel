@@ -11,5 +11,8 @@ export * from './TaskStatus';
 export * from './TaskPriority';
 export * from './WorkerInfo';
 export * from './WorkerStatus';
+export * from './WorkerSummary';
+export * from './WorkerCapabilities';
+export * from './ResourceMonitor';
 export * from './Alert';
 export * from './AlertSeverity';
