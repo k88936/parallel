@@ -1,13 +1,12 @@
 import {useEffect, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
-import {selectProject, fetchProjectChildren, fetchRootProject} from '../store/slices/projectsSlice';
-import type {Project} from '../types';
+import {selectProject, fetchProjectChildren, fetchRootProject, createProject, deleteProject, updateProject} from '../store/slices/projectsSlice';
+import type {Project, CreateProjectRequest, SshKeyConfig, RepoConfig} from '../types';
 import styles from './ProjectPage.module.css';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
-import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
 import Tabs from '@jetbrains/ring-ui-built/components/tabs/dumb-tabs';
 import Tab from '@jetbrains/ring-ui-built/components/tabs/tab';
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
@@ -19,11 +18,12 @@ import IslandContent from '@jetbrains/ring-ui-built/components/island/content';
 import List from '@jetbrains/ring-ui-built/components/list/list';
 import {Type} from '@jetbrains/ring-ui-built/components/list/consts';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
+import Confirm from '@jetbrains/ring-ui-built/components/confirm/confirm';
+import {SubprojectDialog} from '../components/common/SubprojectDialog';
+import {SshKeyDialog} from '../components/common/SshKeyDialog';
+import {RepoDialog} from '../components/common/RepoDialog';
 
 type TabId = 'overview' | 'settings' | 'repos' | 'tasks';
-
-function setShowForm(_b: boolean) {
-}
 
 export const ProjectPage = () => {
     const {projectId} = useParams<{ projectId: string }>();
@@ -31,6 +31,14 @@ export const ProjectPage = () => {
     const dispatch = useAppDispatch();
     const {projects, childrenByParent, rootProjectId, loading} = useAppSelector((state) => state.projects);
     const [activeTab, setActiveTab] = useState<TabId>('overview');
+    const [showAddDialog, setShowAddDialog] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+    const [showSshKeyDialog, setShowSshKeyDialog] = useState(false);
+    const [editingSshKey, setEditingSshKey] = useState<SshKeyConfig | null>(null);
+    const [deleteSshKeyTarget, setDeleteSshKeyTarget] = useState<SshKeyConfig | null>(null);
+    const [showRepoDialog, setShowRepoDialog] = useState(false);
+    const [editingRepo, setEditingRepo] = useState<RepoConfig | null>(null);
+    const [deleteRepoTarget, setDeleteRepoTarget] = useState<RepoConfig | null>(null);
 
     const actualProjectId = projectId === 'root' ? rootProjectId : projectId;
     const project = actualProjectId ? projects[actualProjectId] : null;
@@ -72,31 +80,76 @@ export const ProjectPage = () => {
 
     const breadcrumb = getBreadcrumb();
 
-    const subprojectListData = children.map(childId => {
-        const child = projects[childId];
-        if (!child) return undefined;
-        return {
-            rgItemType: Type.ITEM,
-            key: child.id,
-            label: child.name,
-            description: `${child.repos?.length || 0} repos`,
-            onClick: () => navigate(`/projects/${child.id}`)
-        };
-    }).filter((item): item is NonNullable<typeof item> => item !== undefined);
+    const handleCreateSubproject = async (data: CreateProjectRequest) => {
+        await dispatch(createProject(data)).unwrap();
+    };
 
-    const repoListData = project.repos.map((repo, i) => ({
-        rgItemType: Type.ITEM,
-        key: i.toString(),
-        label: repo.name,
-        description: repo.url
-    }));
+    const handleDeleteSubproject = async () => {
+        if (deleteTarget) {
+            await dispatch(deleteProject(deleteTarget.id)).unwrap();
+            setDeleteTarget(null);
+        }
+    };
 
-    const sshKeyListData = project.ssh_keys.map((key, i) => ({
-        rgItemType: Type.ITEM,
-        key: i.toString(),
-        label: key.name,
-        description: `${key.key.substring(0, 30)}...`
-    }));
+    const handleAddSshKey = async (data: SshKeyConfig) => {
+        const updatedKeys = [...project.ssh_keys, data];
+        await dispatch(updateProject({
+            id: actualProjectId!,
+            data: {name: null, repos: null, ssh_keys: updatedKeys}
+        })).unwrap();
+    };
+
+    const handleEditSshKey = async (data: SshKeyConfig) => {
+        const updatedKeys = project.ssh_keys.map(k => 
+            k.name === editingSshKey?.name ? data : k
+        );
+        await dispatch(updateProject({
+            id: actualProjectId!,
+            data: {name: null, repos: null, ssh_keys: updatedKeys}
+        })).unwrap();
+        setEditingSshKey(null);
+    };
+
+    const handleDeleteSshKey = async () => {
+        if (deleteSshKeyTarget) {
+            const updatedKeys = project.ssh_keys.filter(k => k.name !== deleteSshKeyTarget.name);
+            await dispatch(updateProject({
+                id: actualProjectId!,
+                data: {name: null, repos: null, ssh_keys: updatedKeys}
+            })).unwrap();
+            setDeleteSshKeyTarget(null);
+        }
+    };
+
+    const handleAddRepo = async (data: RepoConfig) => {
+        const updatedRepos = [...project.repos, data];
+        await dispatch(updateProject({
+            id: actualProjectId!,
+            data: {name: null, repos: updatedRepos, ssh_keys: null}
+        })).unwrap();
+    };
+
+    const handleEditRepo = async (data: RepoConfig) => {
+        const updatedRepos = project.repos.map(r => 
+            r.name === editingRepo?.name ? data : r
+        );
+        await dispatch(updateProject({
+            id: actualProjectId!,
+            data: {name: null, repos: updatedRepos, ssh_keys: null}
+        })).unwrap();
+        setEditingRepo(null);
+    };
+
+    const handleDeleteRepo = async () => {
+        if (deleteRepoTarget) {
+            const updatedRepos = project.repos.filter(r => r.name !== deleteRepoTarget.name);
+            await dispatch(updateProject({
+                id: actualProjectId!,
+                data: {name: null, repos: updatedRepos, ssh_keys: null}
+            })).unwrap();
+            setDeleteRepoTarget(null);
+        }
+    };
 
     return (
         <div className={styles.container}>
@@ -117,14 +170,9 @@ export const ProjectPage = () => {
 
             <div className={styles.header}>
                 <Heading level={1}>{project.name}</Heading>
-                <ButtonGroup>
-                    <Button primary onClick={() => setShowForm(true)}>
-                        Add Subproject
-                    </Button>
-                    <Button onClick={() => setShowForm(true)}>
-                        Edit
-                    </Button>
-                </ButtonGroup>
+                <Button primary onClick={() => {}}>
+                    Draft New Task
+                </Button>
             </div>
 
             <Tabs
@@ -161,22 +209,42 @@ export const ProjectPage = () => {
                         </IslandContent>
                     </Island>
 
-                    {children.length > 0 && (
-                        <Island>
-                            <IslandHeader border>
-                                <Heading level={3}>Subprojects</Heading>
-                            </IslandHeader>
-                            <IslandContent>
+                    <Island>
+                        <IslandHeader border>
+                            <Heading level={3}>Subprojects</Heading>
+                            <Button onClick={() => setShowAddDialog(true)}>Add Subproject</Button>
+                        </IslandHeader>
+                        <IslandContent>
+                            {children.length === 0 ? (
+                                <Text>No subprojects yet</Text>
+                            ) : (
                                 <List
-                                    data={subprojectListData}
-                                    onSelect={() => {
-                                    }}
-                                    onMouseOut={() => {
-                                    }}
-                                    onScrollToBottom={() => {
-                                    }}
-                                    onResize={() => {
-                                    }}
+                                    data={children.map(childId => {
+                                        const child = projects[childId];
+                                        if (!child) return undefined;
+                                        return {
+                                            rgItemType: Type.ITEM,
+                                            key: child.id,
+                                            label: child.name,
+                                            description: `${child.repos?.length || 0} repos`,
+                                            onClick: () => navigate(`/projects/${child.id}`),
+                                            rightNodes: (
+                                                <Button
+                                                    danger
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleteTarget(child);
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            )
+                                        };
+                                    }).filter((item): item is NonNullable<typeof item> => item !== undefined)}
+                                    onSelect={() => {}}
+                                    onMouseOut={() => {}}
+                                    onScrollToBottom={() => {}}
+                                    onResize={() => {}}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -185,29 +253,52 @@ export const ProjectPage = () => {
                                     disableMoveDownOverflow={false}
                                     ariaLabel="Subprojects"
                                 />
-                            </IslandContent>
-                        </Island>
-                    )}
+                            )}
+                        </IslandContent>
+                    </Island>
                 </Tab>
                 <Tab id="settings" title="Settings">
                     <Island>
                         <IslandHeader border>
                             <Heading level={3}>SSH Keys</Heading>
+                            <Button onClick={() => setShowSshKeyDialog(true)}>Add SSH Key</Button>
                         </IslandHeader>
                         <IslandContent>
                             {project.ssh_keys.length === 0 ? (
                                 <Text>No SSH keys configured</Text>
                             ) : (
                                 <List
-                                    data={sshKeyListData}
-                                    onSelect={() => {
-                                    }}
-                                    onMouseOut={() => {
-                                    }}
-                                    onScrollToBottom={() => {
-                                    }}
-                                    onResize={() => {
-                                    }}
+                                    data={project.ssh_keys.map((key) => ({
+                                        rgItemType: Type.ITEM,
+                                        key: key.name,
+                                        label: key.name,
+                                        description: `${key.key.substring(0, 40)}...`,
+                                        rightNodes: (
+                                            <>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingSshKey(key);
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    danger
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleteSshKeyTarget(key);
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </>
+                                        )
+                                    }))}
+                                    onSelect={() => {}}
+                                    onMouseOut={() => {}}
+                                    onScrollToBottom={() => {}}
+                                    onResize={() => {}}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -217,9 +308,6 @@ export const ProjectPage = () => {
                                     ariaLabel="SSH Keys"
                                 />
                             )}
-                            <div className={styles.actions}>
-                                <Button onClick={() => setShowForm(true)}>Edit Settings</Button>
-                            </div>
                         </IslandContent>
                     </Island>
                 </Tab>
@@ -227,21 +315,44 @@ export const ProjectPage = () => {
                     <Island>
                         <IslandHeader border>
                             <Heading level={3}>Repositories</Heading>
+                            <Button onClick={() => setShowRepoDialog(true)}>Add Repository</Button>
                         </IslandHeader>
                         <IslandContent>
                             {project.repos.length === 0 ? (
                                 <Text>No repositories configured</Text>
                             ) : (
                                 <List
-                                    data={repoListData}
-                                    onSelect={() => {
-                                    }}
-                                    onMouseOut={() => {
-                                    }}
-                                    onScrollToBottom={() => {
-                                    }}
-                                    onResize={() => {
-                                    }}
+                                    data={project.repos.map((repo) => ({
+                                        rgItemType: Type.ITEM,
+                                        key: repo.name,
+                                        label: repo.name,
+                                        description: repo.url,
+                                        rightNodes: (
+                                            <>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingRepo(repo);
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    danger
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleteRepoTarget(repo);
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </>
+                                        )
+                                    }))}
+                                    onSelect={() => {}}
+                                    onMouseOut={() => {}}
+                                    onScrollToBottom={() => {}}
+                                    onResize={() => {}}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -265,6 +376,69 @@ export const ProjectPage = () => {
                     </Island>
                 </Tab>
             </Tabs>
+
+            <SubprojectDialog
+                show={showAddDialog}
+                parentId={actualProjectId!}
+                onClose={() => setShowAddDialog(false)}
+                onSubmit={handleCreateSubproject}
+            />
+
+            <Confirm
+                show={!!deleteTarget}
+                text="Delete Subproject"
+                description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                rejectLabel="Cancel"
+                onConfirm={handleDeleteSubproject}
+                onReject={() => setDeleteTarget(null)}
+            />
+
+            <SshKeyDialog
+                show={showSshKeyDialog}
+                onClose={() => setShowSshKeyDialog(false)}
+                onSubmit={handleAddSshKey}
+            />
+
+            <SshKeyDialog
+                show={!!editingSshKey}
+                onClose={() => setEditingSshKey(null)}
+                onSubmit={handleEditSshKey}
+                initialData={editingSshKey}
+            />
+
+            <Confirm
+                show={!!deleteSshKeyTarget}
+                text="Delete SSH Key"
+                description={`Are you sure you want to delete SSH key "${deleteSshKeyTarget?.name}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                rejectLabel="Cancel"
+                onConfirm={handleDeleteSshKey}
+                onReject={() => setDeleteSshKeyTarget(null)}
+            />
+
+            <RepoDialog
+                show={showRepoDialog}
+                onClose={() => setShowRepoDialog(false)}
+                onSubmit={handleAddRepo}
+            />
+
+            <RepoDialog
+                show={!!editingRepo}
+                onClose={() => setEditingRepo(null)}
+                onSubmit={handleEditRepo}
+                initialData={editingRepo}
+            />
+
+            <Confirm
+                show={!!deleteRepoTarget}
+                text="Delete Repository"
+                description={`Are you sure you want to delete repository "${deleteRepoTarget?.name}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                rejectLabel="Cancel"
+                onConfirm={handleDeleteRepo}
+                onReject={() => setDeleteRepoTarget(null)}
+            />
         </div>
     );
 };

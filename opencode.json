@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "storybook": {
+      "command": [
+        "bunx",
+        "-y",
+        "storybook-mcp@latest"
+      ],
+      "environment": {
+        "STORYBOOK_URL": "https://jetbrains.github.io/ring-ui/master/index.json"
+      },
+      "type": "local"
+    }
+  }
+}
