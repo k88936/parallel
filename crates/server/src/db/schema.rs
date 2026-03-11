@@ -41,6 +41,7 @@ diesel::table! {
         ssh_keys_json -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        parent_id -> Nullable<Text>,
     }
 }
 

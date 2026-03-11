@@ -77,6 +77,7 @@ pub struct CreateProjectRequest {
     pub name: String,
     pub repos: Vec<RepoConfig>,
     pub ssh_keys: Vec<SshKeyConfig>,
+    pub parent_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +104,7 @@ pub struct UpdateProjectRequest {
     pub name: Option<String>,
     pub repos: Option<Vec<RepoConfig>>,
     pub ssh_keys: Option<Vec<SshKeyConfig>>,
+    pub parent_id: Option<Option<Uuid>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

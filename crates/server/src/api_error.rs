@@ -98,6 +98,10 @@ impl From<crate::errors::ServerError> for ErrorResponse {
                 ErrorResponse::new(ErrorCode::InternalError, "Internal server error")
                     .with_details(s)
             }
+            ServerError::InvalidOperation(s) => ErrorResponse::new(
+                ErrorCode::InvalidStatus,
+                format!("Invalid operation: {}", s),
+            ),
         }
     }
 }

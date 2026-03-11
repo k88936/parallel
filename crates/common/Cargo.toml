@@ -7,3 +7,4 @@ edition.workspace = true
 serde.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+ts-rs="12.0"

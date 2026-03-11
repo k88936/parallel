@@ -34,7 +34,7 @@ pub async fn create_project(
 
     let project_id = state
         .project_service
-        .create(payload.name, payload.repos, payload.ssh_keys)
+        .create(payload.name, payload.repos, payload.ssh_keys, payload.parent_id)
         .await
         .map_err(|e| {
             tracing::error!(
@@ -138,7 +138,7 @@ pub async fn update_project(
 
     let project = state
         .project_service
-        .update(&project_id, payload.name, payload.repos, payload.ssh_keys)
+        .update(&project_id, payload.name, payload.repos, payload.ssh_keys, payload.parent_id)
         .await
         .map_err(|e| {
             tracing::error!(
@@ -183,4 +183,53 @@ pub async fn delete_project(
     );
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_root_project(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> ApiResult<Json<Project>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let project = state.project_service.get_root().await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            error = %e,
+            "Failed to get root project"
+        );
+        ErrorResponse::from(e)
+            .with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(project))
+}
+
+pub async fn get_project_children(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Path(project_id): Path<Uuid>,
+) -> ApiResult<Json<Vec<Project>>> {
+    let correlation_id = request_id
+        .header_value()
+        .to_str()
+        .ok()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let children = state.project_service.get_children(&project_id).await.map_err(|e| {
+        tracing::error!(
+            correlation_id = ?correlation_id,
+            project_id = %project_id,
+            error = %e,
+            "Failed to get project children"
+        );
+        ErrorResponse::new(ErrorCode::InternalError, "Failed to get project children")
+            .with_details(e.to_string())
+            .with_correlation_id(correlation_id.unwrap_or_default())
+    })?;
+
+    Ok(Json(children))
 }

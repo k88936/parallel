@@ -30,6 +30,7 @@ impl ProjectRepository {
 fn db_project_to_project(p: DbProject) -> Project {
     let repos: Vec<RepoConfig> = serde_json::from_str(&p.repos_json).unwrap_or_default();
     let ssh_keys: Vec<SshKeyConfig> = serde_json::from_str(&p.ssh_keys_json).unwrap_or_default();
+    let parent_id = p.get_parent_uuid();
     
     Project {
         id: p.get_uuid(),
@@ -38,6 +39,7 @@ fn db_project_to_project(p: DbProject) -> Project {
         ssh_keys,
         created_at: chrono::DateTime::from_naive_utc_and_offset(p.created_at, Utc),
         updated_at: chrono::DateTime::from_naive_utc_and_offset(p.updated_at, Utc),
+        parent_id,
     }
 }
 
@@ -49,6 +51,7 @@ pub trait ProjectRepositoryTrait: Send + Sync {
         name: String,
         repos: &Vec<RepoConfig>,
         ssh_keys: &Vec<SshKeyConfig>,
+        parent_id: Option<Uuid>,
     ) -> Result<()>;
 
     async fn find_by_id(&self, project_id: &Uuid) -> ServerResult<Project>;
@@ -68,9 +71,12 @@ pub trait ProjectRepositoryTrait: Send + Sync {
         name: Option<String>,
         repos: Option<&Vec<RepoConfig>>,
         ssh_keys: Option<&Vec<SshKeyConfig>>,
+        parent_id: Option<Option<Uuid>>,
     ) -> ServerResult<Project>;
 
     async fn delete(&self, project_id: &Uuid) -> ServerResult<()>;
+
+    async fn find_children(&self, parent_id: &Uuid) -> Result<Vec<Project>>;
 }
 
 #[async_trait]
@@ -81,6 +87,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
         name: String,
         repos: &Vec<RepoConfig>,
         ssh_keys: &Vec<SshKeyConfig>,
+        parent_id: Option<Uuid>,
     ) -> Result<()> {
         let now = Utc::now().naive_utc();
 
@@ -91,6 +98,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
             ssh_keys_json: serde_json::to_string(ssh_keys)?,
             created_at: now,
             updated_at: now,
+            parent_id: parent_id.map(|p| p.to_string()),
         };
 
         let mut conn = self.get_conn()?;
@@ -156,6 +164,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
         name: Option<String>,
         repos: Option<&Vec<RepoConfig>>,
         ssh_keys: Option<&Vec<SshKeyConfig>>,
+        parent_id: Option<Option<Uuid>>,
     ) -> ServerResult<Project> {
         let now = Utc::now().naive_utc();
 
@@ -175,6 +184,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
             Some(k) => serde_json::to_string(k)?,
             None => project.ssh_keys_json,
         };
+        let new_parent_id = parent_id.map(|p| p.map(|id| id.to_string())).unwrap_or(project.parent_id);
 
         diesel::update(projects_schema::table)
             .filter(projects_schema::id.eq(project_id.to_string()))
@@ -183,6 +193,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
                 projects_schema::repos_json.eq(new_repos_json),
                 projects_schema::ssh_keys_json.eq(new_ssh_keys_json),
                 projects_schema::updated_at.eq(now),
+                projects_schema::parent_id.eq(new_parent_id),
             ))
             .execute(&mut conn)?;
 
@@ -205,5 +216,17 @@ impl ProjectRepositoryTrait for ProjectRepository {
         }
 
         Ok(())
+    }
+
+    async fn find_children(&self, parent_id: &Uuid) -> Result<Vec<Project>> {
+        let mut conn = self.get_conn()?;
+        let db_projects = projects_schema::table
+            .filter(projects_schema::parent_id.eq(parent_id.to_string()))
+            .load::<DbProject>(&mut conn)?;
+
+        Ok(db_projects
+            .into_iter()
+            .map(db_project_to_project)
+            .collect())
     }
 }
