@@ -16,6 +16,7 @@ export * from './WorkerCapabilities';
 export * from './ResourceMonitor';
 export * from './Alert';
 export * from './AlertSeverity';
+export * from './AlertPayload';
 export * from './ListTasksQuery';
 export * from './TaskListResponse';
 export * from './ReviewData';
