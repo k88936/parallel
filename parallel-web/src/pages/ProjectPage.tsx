@@ -3,7 +3,7 @@ import {useNavigate, useParams} from 'react-router-dom';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {selectProject, fetchProjectChildren, fetchRootProject} from '../store/slices/projectsSlice';
 import type {Project} from '../types';
-import styles from './ProjectDetail.module.css';
+import styles from './ProjectPage.module.css';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
@@ -24,7 +24,8 @@ type TabId = 'overview' | 'settings' | 'repos' | 'tasks';
 
 function setShowForm(_b: boolean) {
 }
-export const ProjectDetail = () => {
+
+export const ProjectPage = () => {
     const {projectId} = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
@@ -53,10 +54,10 @@ export const ProjectDetail = () => {
     if (!project) {
         return (
             <div className={styles.loading}>
-                <Loader/>
-                <Text>{loading ? 'Loading project...' : 'Project not found'}</Text>
+                <Loader message=
+                                  {loading ? 'Loading project...' : 'Project not found'}/>
             </div>
-        );
+        )
     }
 
     const getBreadcrumb = () => {
@@ -126,7 +127,11 @@ export const ProjectDetail = () => {
                 </ButtonGroup>
             </div>
 
-            <Tabs onSelect={(key) => setActiveTab(key as TabId)} selected={activeTab} className={styles.tabs}>
+            <Tabs
+                onSelect={(key) => setActiveTab(key as TabId)}
+                selected={activeTab}
+                className={styles.tabs}
+            >
                 <Tab id="overview" title="Overview">
                     <Island>
                         <IslandHeader border>

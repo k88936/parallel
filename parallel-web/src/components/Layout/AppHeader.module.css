@@ -1,0 +1,10 @@
+.header {
+    position: sticky;
+    top: 0;
+}
+
+.logoLink {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}

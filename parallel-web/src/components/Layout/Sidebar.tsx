@@ -55,11 +55,6 @@ export const Sidebar = () => {
                     />
                 ) : null}
             </div>
-            <div className={styles.footer}>
-                <div className={styles.user}>
-                    <Text>User</Text>
-                </div>
-            </div>
         </aside>
     );
 };
