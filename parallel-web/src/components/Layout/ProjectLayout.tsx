@@ -4,7 +4,6 @@ import {projectsApi} from '../../api';
 import type {Project} from '../../types';
 import {Sidebar} from './Sidebar';
 import type {ProjectLayoutContextValue} from './ProjectLayoutContext';
-import styles from './ProjectLayout.module.css';
 
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) {
@@ -196,7 +195,7 @@ export const ProjectLayout = () => {
     ]);
 
     return (
-        <div className={styles.layout}>
+        <div className="flex flex-1 overflow-hidden">
             <Sidebar
                 projects={projects}
                 childrenByParent={childrenByParent}
@@ -213,7 +212,7 @@ export const ProjectLayout = () => {
                 }}
                 onLoadChildren={ensureChildrenLoaded}
             />
-            <main className={styles.main}>
+            <main className="flex-1 flex flex-col overflow-hidden p-4">
                 <Outlet context={contextValue} />
             </main>
         </div>

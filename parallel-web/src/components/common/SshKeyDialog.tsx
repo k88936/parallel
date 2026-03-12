@@ -2,7 +2,7 @@ import {useState, useEffect} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import type {SshKeyConfig} from '../../types';
-import './DialogForm.css';
+import {df} from './dialogStyles';
 
 interface SshKeyDialogProps {
     show: boolean;
@@ -76,17 +76,17 @@ export const SshKeyDialog = ({show, onClose, onSubmit, initialData}: SshKeyDialo
             dense
         >
             <div>
-                <form className="ring-form" onSubmit={handleSubmit}>
-                    <span className="ring-form__title">{isEdit ? 'Edit SSH Key' : 'Add SSH Key'}</span>
+                <form className={df.form} onSubmit={handleSubmit}>
+                    <span className={df.title}>{isEdit ? 'Edit SSH Key' : 'Add SSH Key'}</span>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="ssh-name" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="ssh-name" className={df.label}>
                             Name
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="ssh-name"
-                                className={`ring-input ring-input-size_m ${error && !name.trim() ? 'ring-input_error' : ''}`}
+                                className={`${df.input} ${df.inputM} ${error && !name.trim() ? df.inputError : ''}`}
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -97,14 +97,14 @@ export const SshKeyDialog = ({show, onClose, onSubmit, initialData}: SshKeyDialo
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="ssh-key" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="ssh-key" className={df.label}>
                             Key
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <textarea
                                 id="ssh-key"
-                                className={`ring-input ${error && !key.trim() ? 'ring-input_error' : ''}`}
+                                className={`${df.input} ${error && !key.trim() ? df.inputError : ''}`}
                                 value={key}
                                 onChange={(e) => setKey(e.target.value)}
                                 placeholder="Paste SSH private key"
@@ -112,11 +112,11 @@ export const SshKeyDialog = ({show, onClose, onSubmit, initialData}: SshKeyDialo
                                 rows={6}
                                 style={{resize: 'vertical', maxWidth: '100%'}}
                             />
-                            {error && <div className="ring-error-bubble active">{error}</div>}
+                            {error && <div className={df.errorBubble}>{error}</div>}
                         </div>
                     </div>
 
-                    <div className="ring-form__footer">
+                    <div className={df.footer}>
                         <Button primary type="submit" disabled={loading}>
                             {loading ? 'Saving...' : (isEdit ? 'Save' : 'Add')}
                         </Button>

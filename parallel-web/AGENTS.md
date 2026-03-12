@@ -12,6 +12,7 @@ This is the web frontend for the Parallel distributed AI coding agent management
 
 - React 19 + TypeScript
 - Vite 7.x
+- tailwindcss
 - Ring UI (JetBrains design system)
 - Axios for API calls
 

@@ -2,7 +2,7 @@ import {useState, useEffect} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import type {RepoConfig} from '../../types';
-import './DialogForm.css';
+import {df} from './dialogStyles';
 
 interface RepoDialogProps {
     show: boolean;
@@ -76,17 +76,17 @@ export const RepoDialog = ({show, onClose, onSubmit, initialData}: RepoDialogPro
             dense
         >
             <div>
-                <form className="ring-form" onSubmit={handleSubmit}>
-                    <span className="ring-form__title">{isEdit ? 'Edit Repository' : 'Add Repository'}</span>
+                <form className={df.form} onSubmit={handleSubmit}>
+                    <span className={df.title}>{isEdit ? 'Edit Repository' : 'Add Repository'}</span>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="repo-name" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="repo-name" className={df.label}>
                             Name
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="repo-name"
-                                className={`ring-input ring-input-size_m ${error && !name.trim() ? 'ring-input_error' : ''}`}
+                                className={`${df.input} ${df.inputM} ${error && !name.trim() ? df.inputError : ''}`}
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -97,25 +97,25 @@ export const RepoDialog = ({show, onClose, onSubmit, initialData}: RepoDialogPro
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="repo-url" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="repo-url" className={df.label}>
                             URL
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="repo-url"
-                                className={`ring-input ${error && !url.trim() ? 'ring-input_error' : ''}`}
+                                className={`${df.input} ${error && !url.trim() ? df.inputError : ''}`}
                                 type="text"
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
                                 placeholder="git@github.com:org/repo.git"
                                 disabled={loading}
                             />
-                            {error && <div className="ring-error-bubble active">{error}</div>}
+                            {error && <div className={df.errorBubble}>{error}</div>}
                         </div>
                     </div>
 
-                    <div className="ring-form__footer">
+                    <div className={df.footer}>
                         <Button primary type="submit" disabled={loading}>
                             {loading ? 'Saving...' : (isEdit ? 'Save' : 'Add')}
                         </Button>

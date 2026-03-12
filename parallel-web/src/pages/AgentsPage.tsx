@@ -1,7 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {workersApi} from '../api';
 import type {ResourceMonitor, WorkerInfo, WorkerStatus, WorkerSummary} from '../types';
-import styles from './AgentsPage.module.css';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
 import Text from '@jetbrains/ring-ui-built/components/text/text';
@@ -12,19 +11,11 @@ import IslandContent from '@jetbrains/ring-ui-built/components/island/content';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 
-const getStatusColor = (status: WorkerStatus): string => {
-    switch (status) {
-        case 'idle':
-            return styles.idle;
-        case 'busy':
-            return styles.busy;
-        case 'offline':
-            return styles.offline;
-        case 'dead':
-            return styles.dead;
-        default:
-            return '';
-    }
+const STATUS_DOT_COLOR: Record<WorkerStatus, string> = {
+    idle: 'bg-[#4caf50]',
+    busy: 'bg-[#ff9800]',
+    offline: 'bg-[#9e9e9e]',
+    dead: 'bg-[#f44336]',
 };
 
 const formatTimeAgo = (dateStr: string): string => {
@@ -41,10 +32,10 @@ const formatTimeAgo = (dateStr: string): string => {
     return `${days}d ago`;
 };
 
-const getResourceLevel = (percent: number): string => {
-    if (percent < 50) return styles.low;
-    if (percent < 80) return styles.medium;
-    return styles.high;
+const getResourceBarColor = (percent: number): string => {
+    if (percent < 50) return 'bg-[#4caf50]';
+    if (percent < 80) return 'bg-[#ff9800]';
+    return 'bg-[#f44336]';
 };
 
 const getErrorMessage = (error: unknown): string => {
@@ -154,39 +145,39 @@ export const AgentsPage = () => {
     };
 
     return (
-        <div className={styles.container}>
-            <aside className={styles.sidebar}>
-                <div className={styles.sidebarHeader}>
+        <div className="flex w-full gap-4 overflow-hidden">
+            <aside className="w-70 min-w-70 flex flex-col bg-(--ring-sidebar-background-color,#1e1e1e) border border-(--ring-border-color,#3d3d3d) rounded overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] flex items-center justify-between">
                     <Heading level={3}>Agents</Heading>
                     <Button onClick={() => void handleRefresh()} disabled={loading}>
                         Refresh
                     </Button>
                 </div>
-                <div className={styles.sidebarContent}>
+                <div className="flex-1 overflow-y-auto">
                     {error && workers.length === 0 ? (
-                        <div className={styles.empty}>
+                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                             <Text>{error}</Text>
                         </div>
                     ) : loading && workers.length === 0 ? (
-                        <div className={styles.empty}>
+                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                             <Loader />
                         </div>
                     ) : workers.length === 0 ? (
-                        <div className={styles.empty}>
+                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                             <Text>No agents connected</Text>
                         </div>
                     ) : (
-                        <div className={styles.workerList}>
+                        <div className="p-0">
                             {workers.map((worker) => (
                                 <div
                                     key={worker.id}
-                                    className={`${styles.workerItem} ${selectedWorkerId === worker.id ? styles.selected : ''}`}
+                                    className={`px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] cursor-pointer flex items-center gap-3 transition-colors hover:bg-[var(--ring-hover-background-color,#2d2d2d)] ${selectedWorkerId === worker.id ? 'bg-[var(--ring-selected-background-color,#3d3d3d)]' : ''}`}
                                     onClick={() => setSelectedWorkerId(worker.id)}
                                 >
-                                    <div className={`${styles.statusDot} ${getStatusColor(worker.status)}`} />
-                                    <div className={styles.workerInfo}>
-                                        <div className={styles.workerName}>{worker.name}</div>
-                                        <div className={styles.workerMeta}>
+                                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT_COLOR[worker.status]}`} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{worker.name}</div>
+                                        <div className="flex gap-2 text-xs text-[var(--ring-secondary-text-color,#888)] mt-0.5">
                                             <span>{worker.status}</span>
                                             <span>Tasks: {worker.current_task_count}</span>
                                             <span>{formatTimeAgo(worker.last_heartbeat)}</span>
@@ -199,52 +190,52 @@ export const AgentsPage = () => {
                 </div>
             </aside>
 
-            <main className={styles.main}>
+            <main className="flex-1 flex flex-col overflow-hidden m-4 ml-0">
                 {!selectedWorkerId ? (
-                    <div className={styles.empty}>
+                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                         <Text>Select an agent to view details</Text>
                     </div>
                 ) : infoLoading && !selectedWorkerInfo ? (
-                    <div className={styles.empty}>
+                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                         <Loader />
                     </div>
                 ) : selectedWorkerInfo ? (
-                    <div className={styles.detailContent}>
+                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
                         {error && (
-                            <div className={styles.empty}>
+                            <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
                                 <Text>{error}</Text>
                             </div>
                         )}
-                        <div className={styles.topRow}>
+                        <div className="flex gap-4 shrink-0">
                             <Island>
                                 <IslandHeader border>
                                     <Heading level={3}>Info</Heading>
                                 </IslandHeader>
                                 <IslandContent>
-                                    <div className={styles.infoGrid}>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>Name</div>
-                                            <div className={styles.infoValue}>{selectedWorkerInfo.name}</div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Name</div>
+                                            <div className="text-sm">{selectedWorkerInfo.name}</div>
                                         </div>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>ID</div>
-                                            <div className={styles.infoValue}>{selectedWorkerInfo.id.substring(0, 8)}...</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">ID</div>
+                                            <div className="text-sm">{selectedWorkerInfo.id.substring(0, 8)}...</div>
                                         </div>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>Status</div>
-                                            <div className={styles.infoValue}>{selectedWorkerInfo.status}</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Status</div>
+                                            <div className="text-sm">{selectedWorkerInfo.status}</div>
                                         </div>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>Max Concurrent</div>
-                                            <div className={styles.infoValue}>{selectedWorkerInfo.max_concurrent}</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max Concurrent</div>
+                                            <div className="text-sm">{selectedWorkerInfo.max_concurrent}</div>
                                         </div>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>Has Git</div>
-                                            <div className={styles.infoValue}>{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Has Git</div>
+                                            <div className="text-sm">{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
                                         </div>
-                                        <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>Last Heartbeat</div>
-                                            <div className={styles.infoValue}>{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Last Heartbeat</div>
+                                            <div className="text-sm">{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
                                         </div>
                                     </div>
                                 </IslandContent>
@@ -256,46 +247,46 @@ export const AgentsPage = () => {
                                         <Heading level={3}>Resources</Heading>
                                     </IslandHeader>
                                     <IslandContent>
-                                        <div className={styles.resourceRow}>
-                                            <div className={styles.resourceLabel}>
+                                        <div className="mb-3 last:mb-0">
+                                            <div className="flex justify-between mb-1">
                                                 <span>CPU</span>
                                                 <span>{selectedWorkerResources.cpu_usage_percent.toFixed(1)}%</span>
                                             </div>
-                                            <div className={styles.resourceBar}>
+                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.cpu_usage_percent)}`}
+                                                    className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.cpu_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.cpu_usage_percent}%`}}
                                                 />
                                             </div>
                                         </div>
 
-                                        <div className={styles.resourceRow}>
-                                            <div className={styles.resourceLabel}>
+                                        <div className="mb-3 last:mb-0">
+                                            <div className="flex justify-between mb-1">
                                                 <span>Memory</span>
                                                 <span>
                                                     {selectedWorkerResources.memory_used_mb}MB / {selectedWorkerResources.memory_total_mb}MB (
                                                     {selectedWorkerResources.memory_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
-                                            <div className={styles.resourceBar}>
+                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.memory_usage_percent)}`}
+                                                    className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.memory_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.memory_usage_percent}%`}}
                                                 />
                                             </div>
                                         </div>
 
-                                        <div className={styles.resourceRow}>
-                                            <div className={styles.resourceLabel}>
+                                        <div className="mb-3 last:mb-0">
+                                            <div className="flex justify-between mb-1">
                                                 <span>Disk</span>
                                                 <span>
                                                     {selectedWorkerResources.disk_used_gb.toFixed(1)}GB / {selectedWorkerResources.disk_total_gb.toFixed(1)}GB (
                                                     {selectedWorkerResources.disk_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
-                                            <div className={styles.resourceBar}>
+                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.disk_usage_percent)}`}
+                                                    className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.disk_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.disk_usage_percent}%`}}
                                                 />
                                             </div>
@@ -309,9 +300,9 @@ export const AgentsPage = () => {
                                     <Heading level={3}>Capabilities</Heading>
                                 </IslandHeader>
                                 <IslandContent>
-                                    <div className={styles.infoItem}>
-                                        <div className={styles.infoLabel}>Available Agents</div>
-                                        <div className={styles.capabilityList}>
+                                    <div className="flex flex-col gap-1">
+                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Available Agents</div>
+                                        <div className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.available_agents.length > 0 ? (
                                                 selectedWorkerInfo.capabilities.available_agents.map((agent) => <Tag key={agent}>{agent}</Tag>)
                                             ) : (
@@ -319,9 +310,9 @@ export const AgentsPage = () => {
                                             )}
                                         </div>
                                     </div>
-                                    <div className={styles.infoItem} style={{marginTop: 12}}>
-                                        <div className={styles.infoLabel}>Supported Languages</div>
-                                        <div className={styles.capabilityList}>
+                                    <div className="flex flex-col gap-1 mt-3">
+                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Supported Languages</div>
+                                        <div className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.supported_languages.length > 0 ? (
                                                 selectedWorkerInfo.capabilities.supported_languages.map((language) => <Tag key={language}>{language}</Tag>)
                                             ) : (
@@ -333,8 +324,8 @@ export const AgentsPage = () => {
                             </Island>
                         </div>
 
-                        <div className={styles.tasksSection}>
-                            <Island className={styles.tasksIsland}>
+                        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                            <Island className="flex-1 flex flex-col overflow-hidden">
                                 <IslandHeader border>
                                     <Heading level={3}>Current Tasks</Heading>
                                     <Tag>{selectedWorkerInfo.current_tasks.length}</Tag>
@@ -343,7 +334,7 @@ export const AgentsPage = () => {
                                     {selectedWorkerInfo.current_tasks.length === 0 ? (
                                         <Text>No tasks running</Text>
                                     ) : (
-                                        <div className={styles.capabilityList}>
+                                        <div className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.current_tasks.map((taskId) => (
                                                 <Tag key={taskId}>{taskId.substring(0, 8)}...</Tag>
                                             ))}

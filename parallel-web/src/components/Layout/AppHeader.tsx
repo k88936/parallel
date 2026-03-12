@@ -11,8 +11,6 @@ import settingsIcon from '@jetbrains/icons/settings-20px';
 import bellIcon from '@jetbrains/icons/bell-20px';
 import helpIcon from '@jetbrains/icons/help-20px';
 
-import styles from './AppHeader.module.css';
-
 const PARALLEL_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
   <rect width="40" height="40" rx="8" fill="#6B57FF"/>
   <path d="M12 10h16v4H16v5h10v4H16v7h-4V10z" fill="#fff"/>
@@ -26,14 +24,12 @@ export const AppHeader = () => {
 
     return (
         <Header
-            className={styles.header}
+            className="sticky top-0"
             spaced={true}
             vertical
         >
-            <Link href="/" className={styles.logoLink}>
-                <Logo
-                    glyph={PARALLEL_LOGO}
-                />
+            <Link href="/" className="flex items-center no-underline">
+                <Logo glyph={PARALLEL_LOGO} />
             </Link>
             <Links>
                 <HeaderIcon
@@ -75,7 +71,7 @@ export const AppHeader = () => {
                     user={{
                         id: '1',
                         login: 'user',
-                        name: 'User'
+                        name: 'User',
                     }}
                 />
             </Tray>

@@ -2,7 +2,7 @@ import {useState, useEffect} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import type {CreateProjectRequest} from '../../types';
-import './DialogForm.css';
+import {df} from './dialogStyles';
 
 interface SubprojectDialogProps {
     show: boolean;
@@ -65,17 +65,17 @@ export const SubprojectDialog = ({show, parentId, onClose, onSubmit}: Subproject
             dense
         >
             <div>
-                <form className="ring-form" onSubmit={handleSubmit}>
-                    <span className="ring-form__title">Add Subproject</span>
+                <form className={df.form} onSubmit={handleSubmit}>
+                    <span className={df.title}>Add Subproject</span>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="subproject-name" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="subproject-name" className={df.label}>
                             Name
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="subproject-name"
-                                className={`ring-input ring-input-size_m ${error ? 'ring-input_error' : ''}`}
+                                className={`${df.input} ${df.inputM} ${error ? df.inputError : ''}`}
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -83,11 +83,11 @@ export const SubprojectDialog = ({show, parentId, onClose, onSubmit}: Subproject
                                 disabled={loading}
                                 autoFocus
                             />
-                            {error && <div className="ring-error-bubble active">{error}</div>}
+                            {error && <div className={df.errorBubble}>{error}</div>}
                         </div>
                     </div>
 
-                    <div className="ring-form__footer">
+                    <div className={df.footer}>
                         <Button primary type="submit" disabled={loading}>
                             {loading ? 'Creating...' : 'Create'}
                         </Button>

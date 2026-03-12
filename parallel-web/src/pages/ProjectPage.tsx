@@ -3,7 +3,6 @@ import {useNavigate, useParams} from 'react-router-dom';
 import {projectsApi, tasksApi} from '../api';
 import {useProjectLayoutContext} from '../components/Layout';
 import type {CreateProjectRequest, CreateTaskRequest, Project, RepoConfig, SshKeyConfig} from '../types';
-import styles from './ProjectPage.module.css';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
@@ -140,7 +139,7 @@ export const ProjectPage = () => {
 
     if (!actualProjectId || pageLoading || (loading && !project)) {
         return (
-            <div className={styles.loading}>
+            <div className="flex-1 flex flex-col items-center justify-center gap-4">
                 <Loader message="Loading project..." />
             </div>
         );
@@ -148,7 +147,7 @@ export const ProjectPage = () => {
 
     if (!project) {
         return (
-            <div className={styles.loading}>
+            <div className="flex-1 flex flex-col items-center justify-center gap-4">
                 <Text>{pageError || error || 'Project not found'}</Text>
             </div>
         );
@@ -270,18 +269,18 @@ export const ProjectPage = () => {
     };
 
     return (
-        <div className={styles.container}>
+        <div className="flex-1 flex flex-col overflow-hidden p-0">
             {pageError && (
-                <div className={styles.breadcrumbWrapper}>
+                <div className="px-5 py-3 border-b border-[var(--ring-border-color,#3d3d3d)]">
                     <Text>{pageError}</Text>
                 </div>
             )}
-            <div className={styles.breadcrumbWrapper}>
+            <div className="px-5 py-3 border-b border-[var(--ring-border-color,#3d3d3d)]">
                 <Breadcrumbs>
                     {breadcrumb.map((part, index) => (
                         <span key={part.id || index}>
                             <span
-                                className={styles.breadcrumbLink}
+                                className="cursor-pointer text-[var(--ring-link-color,#4a90d9)] hover:underline"
                                 onClick={() => part.id && index < breadcrumb.length - 1 && navigate(`/projects/${part.id}`)}
                             >
                                 {part.name}
@@ -291,26 +290,26 @@ export const ProjectPage = () => {
                 </Breadcrumbs>
             </div>
 
-            <div className={styles.header}>
+            <div className="flex justify-between items-center p-5 gap-4">
                 <Heading level={1}>{project.name}</Heading>
                 <Button primary onClick={() => setShowCreateTaskDialog(true)}>
                     Draft New Task
                 </Button>
             </div>
 
-            <Tabs onSelect={(key) => setActiveTab(key as TabId)} selected={activeTab} className={styles.tabs}>
+            <Tabs onSelect={(key) => setActiveTab(key as TabId)} selected={activeTab} className="flex-1 px-5">
                 <Tab id="overview" title="Overview">
                     <Island>
                         <IslandHeader border>
                             <Heading level={3}>Project Details</Heading>
                         </IslandHeader>
                         <IslandContent>
-                            <div className={styles.infoGrid}>
-                                <div className={styles.infoItem}>
+                            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+                                <div className="flex flex-col gap-2">
                                     <Tag>Parent</Tag>
                                     <Text>{(project.parent_id && projects[project.parent_id]?.name) || 'None'}</Text>
                                 </div>
-                                <div className={styles.infoItem}>
+                                <div className="flex flex-col gap-2">
                                     <Tag>Subprojects</Tag>
                                     <Text>{children.length}</Text>
                                 </div>

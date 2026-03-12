@@ -1,7 +1,0 @@
-.app {
-    display: flex;
-    flex-direction: row;
-    min-height: 100vh;
-    background: var(--ring-content-background-color, #1e1e1e);
-    color: var(--ring-text-color, #fff);
-}

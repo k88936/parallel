@@ -1,5 +1,4 @@
 import type {Project} from '../../types';
-import styles from './Sidebar.module.css';
 
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
@@ -37,11 +36,11 @@ export const ProjectTree = ({
     const hasChildren = children.length > 0;
 
     return (
-        <div className={styles.treeNode}>
-            <div className={`${styles.nodeContent} ${isSelected ? styles.selected : ''}`}>
+        <div className="select-none">
+            <div className={`flex items-center px-2 py-1 rounded gap-0.5 hover:bg-[var(--ring-hover-background-color,#2d2d2d)] ${isSelected ? 'bg-[var(--ring-selected-background-color,#3d3d3d)]' : ''}`}>
                 <Button
                     inline
-                    className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}
+                    className={`w-5 min-w-[20px] !p-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
                     onClick={(e) => {
                         e.stopPropagation();
                         void onNodeToggle(projectId);
@@ -51,11 +50,11 @@ export const ProjectTree = ({
                 <Icon
                     glyph={folderIcon}
                     color={isSelected ? Color.BLUE : Color.DEFAULT}
-                    className={styles.nodeIcon}
+                    className="shrink-0"
                 />
                 <Button
                     inline
-                    className={styles.nodeButton}
+                    className="flex-1 justify-start text-left overflow-hidden text-ellipsis"
                     onClick={() => onNodeClick(projectId)}
                     active={isSelected}
                 >
@@ -63,7 +62,7 @@ export const ProjectTree = ({
                 </Button>
             </div>
             {isExpanded && hasChildren && (
-                <div className={styles.children}>
+                <div className="pl-4">
                     {children.map((childId) => (
                         <ProjectTree
                             key={childId}

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import {useEffect, useState} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Select from '@jetbrains/ring-ui-built/components/select/select';
 import Input from '@jetbrains/ring-ui-built/components/input/input';
-import type { RepoConfig, SshKeyConfig, TaskPriority, CreateTaskRequest } from '../../types';
-import './DialogForm.css';
+import type {CreateTaskRequest, RepoConfig, SshKeyConfig, TaskPriority} from '../../types';
+import {df} from './dialogStyles';
 
 interface CreateTaskDialogProps {
     show: boolean;
@@ -17,11 +17,11 @@ interface CreateTaskDialogProps {
     error?: string | null;
 }
 
-const PRIORITY_OPTIONS = [
-    { key: 'low', label: 'Low' },
-    { key: 'normal', label: 'Normal' },
-    { key: 'high', label: 'High' },
-    { key: 'urgent', label: 'Urgent' },
+const PRIORITY_OPTIONS: Array<{key: TaskPriority; label: string}> = [
+    {key: 'low', label: 'Low'},
+    {key: 'normal', label: 'Normal'},
+    {key: 'high', label: 'High'},
+    {key: 'urgent', label: 'Urgent'},
 ];
 
 const generateDefaultTitle = () => {
@@ -29,6 +29,8 @@ const generateDefaultTitle = () => {
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `Task ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 };
+
+const isTaskPriority = (value: string): value is TaskPriority => PRIORITY_OPTIONS.some((option) => option.key === value);
 
 export const CreateTaskDialog = ({
     show,
@@ -42,6 +44,7 @@ export const CreateTaskDialog = ({
 }: CreateTaskDialogProps) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [descriptionError, setDescriptionError] = useState<string | null>(null);
     const [repoRef, setRepoRef] = useState('');
     const [sshKeyRef, setSshKeyRef] = useState('');
     const [baseBranch, setBaseBranch] = useState('main');
@@ -55,6 +58,7 @@ export const CreateTaskDialog = ({
     const resetForm = () => {
         setTitle(generateDefaultTitle());
         setDescription('');
+        setDescriptionError(null);
         setRepoRef(repos[0]?.name || '');
         setSshKeyRef(sshKeys[0]?.name || '');
         setBaseBranch('main');
@@ -75,14 +79,14 @@ export const CreateTaskDialog = ({
 
     const handleAddLabel = () => {
         if (labelKey.trim() && labelValue.trim()) {
-            setLabels({ ...labels, [labelKey.trim()]: labelValue.trim() });
+            setLabels({...labels, [labelKey.trim()]: labelValue.trim()});
             setLabelKey('');
             setLabelValue('');
         }
     };
 
     const handleRemoveLabel = (key: string) => {
-        const newLabels = { ...labels };
+        const newLabels = {...labels};
         delete newLabels[key];
         setLabels(newLabels);
     };
@@ -90,8 +94,10 @@ export const CreateTaskDialog = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!description.trim()) {
+            setDescriptionError('Description is required');
             return;
         }
+        setDescriptionError(null);
 
         const data: CreateTaskRequest = {
             title: title.trim() || generateDefaultTitle(),
@@ -101,7 +107,7 @@ export const CreateTaskDialog = ({
             target_branch: targetBranch.trim() || null,
             priority: priority === 'normal' ? null : priority,
             ssh_key_ref: sshKeyRef,
-            max_execution_time: maxExecutionTime ? Number(maxExecutionTime): null,
+            max_execution_time: maxExecutionTime ? Number(maxExecutionTime) : null,
             project_id: projectId,
             required_labels: Object.keys(labels).length > 0 ? labels : {},
         };
@@ -115,8 +121,8 @@ export const CreateTaskDialog = ({
         }
     };
 
-    const repoOptions = repos.map((r) => ({ key: r.name, label: r.name }));
-    const sshKeyOptions = sshKeys.map((k) => ({ key: k.name, label: k.name }));
+    const repoOptions = repos.map((r) => ({key: r.name, label: r.name}));
+    const sshKeyOptions = sshKeys.map((k) => ({key: k.name, label: k.name}));
     const selectedRepo = repoOptions.find((o) => o.key === repoRef);
     const selectedSshKey = sshKeyOptions.find((o) => o.key === sshKeyRef);
     const selectedPriority = PRIORITY_OPTIONS.find((o) => o.key === priority);
@@ -133,17 +139,17 @@ export const CreateTaskDialog = ({
             dense
         >
             <div>
-                <form className="ring-form" onSubmit={handleSubmit}>
-                    <span className="ring-form__title">Create Task</span>
+                <form className={df.form} onSubmit={handleSubmit}>
+                    <span className={df.title}>Create Task</span>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="task-title" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="task-title" className={df.label}>
                             Title
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="task-title"
-                                className="ring-input ring-input-size_m"
+                                className={`${df.input} ${df.inputM}`}
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
@@ -153,27 +159,33 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="task-description" className="ring-form__label">
-                            Description <span style={{ color: 'red' }}>*</span>
+                    <div className={df.group}>
+                        <label htmlFor="task-description" className={df.label}>
+                            Description <span className="text-[var(--ring-error-color,#f00)]">*</span>
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <textarea
                                 id="task-description"
-                                className="ring-input ring-input-size_m"
+                                className={`${df.input} ${df.inputM} ${descriptionError ? df.inputError : ''}`}
                                 value={description}
-                                onChange={(e) => setDescription(e.target.value)}
+                                onChange={(e) => {
+                                    setDescription(e.target.value);
+                                    if (descriptionError && e.target.value.trim()) {
+                                        setDescriptionError(null);
+                                    }
+                                }}
                                 placeholder="Task description..."
                                 disabled={loading}
                                 rows={4}
-                                style={{ resize: 'vertical' }}
+                                style={{resize: 'vertical'}}
                             />
+                            {descriptionError && <div className={df.errorBubble}>{descriptionError}</div>}
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label className="ring-form__label">Repository</label>
-                        <div className="ring-form__control">
+                    <div className={df.group}>
+                        <label className={df.label}>Repository</label>
+                        <div className={df.control}>
                             <Select
                                 data={repoOptions}
                                 selected={selectedRepo}
@@ -184,9 +196,9 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label className="ring-form__label">SSH Key</label>
-                        <div className="ring-form__control">
+                    <div className={df.group}>
+                        <label className={df.label}>SSH Key</label>
+                        <div className={df.control}>
                             <Select
                                 data={sshKeyOptions}
                                 selected={selectedSshKey}
@@ -197,14 +209,14 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="task-base-branch" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="task-base-branch" className={df.label}>
                             Base Branch
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="task-base-branch"
-                                className="ring-input ring-input-size_m"
+                                className={`${df.input} ${df.inputM}`}
                                 type="text"
                                 value={baseBranch}
                                 onChange={(e) => setBaseBranch(e.target.value)}
@@ -214,14 +226,14 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="task-target-branch" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="task-target-branch" className={df.label}>
                             Target Branch
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="task-target-branch"
-                                className="ring-input ring-input-size_m"
+                                className={`${df.input} ${df.inputM}`}
                                 type="text"
                                 value={targetBranch}
                                 onChange={(e) => setTargetBranch(e.target.value)}
@@ -231,27 +243,27 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label className="ring-form__label">Priority</label>
-                        <div className="ring-form__control">
+                    <div className={df.group}>
+                        <label className={df.label}>Priority</label>
+                        <div className={df.control}>
                             <Select
                                 data={PRIORITY_OPTIONS}
                                 selected={selectedPriority}
-                                onSelect={(opt) => setPriority(opt?.key as TaskPriority || 'normal')}
+                                onSelect={(opt) => setPriority(opt && isTaskPriority(opt.key) ? opt.key : 'normal')}
                                 disabled={loading}
                                 type={Select.Type.INLINE}
                             />
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label htmlFor="task-max-time" className="ring-form__label">
+                    <div className={df.group}>
+                        <label htmlFor="task-max-time" className={df.label}>
                             Max Execution Time (s)
                         </label>
-                        <div className="ring-form__control">
+                        <div className={df.control}>
                             <input
                                 id="task-max-time"
-                                className="ring-input ring-input-size_m"
+                                className={`${df.input} ${df.inputM}`}
                                 type="number"
                                 value={maxExecutionTime}
                                 onChange={(e) => setMaxExecutionTime(e.target.value)}
@@ -262,10 +274,10 @@ export const CreateTaskDialog = ({
                         </div>
                     </div>
 
-                    <div className="ring-form__group">
-                        <label className="ring-form__label">Required Labels</label>
-                        <div className="ring-form__control">
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <div className={df.group}>
+                        <label className={df.label}>Required Labels</label>
+                        <div className={df.control}>
+                            <div className="flex gap-2 mb-2">
                                 <Input
                                     value={labelKey}
                                     onChange={(e) => setLabelKey(e.target.value)}
@@ -283,8 +295,8 @@ export const CreateTaskDialog = ({
                                 </Button>
                             </div>
                             {Object.entries(labels).map(([key, value]) => (
-                                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                    <span className="ring-label" style={{ padding: '2px 8px', background: '#eee', borderRadius: 4 }}>
+                                <div key={key} className="flex items-center gap-2 mb-1">
+                                    <span className="px-2 py-0.5 bg-[#333] rounded text-sm">
                                         {key}: {value}
                                     </span>
                                     <Button danger inline onClick={() => handleRemoveLabel(key)} disabled={loading}>
@@ -296,13 +308,16 @@ export const CreateTaskDialog = ({
                     </div>
 
                     {error && (
-                        <div className="ring-form__group">
-                            <div className="ring-error-bubble active">{error}</div>
+                        <div className={df.group}>
+                            <div className={df.label} />
+                            <div className={df.control}>
+                                <div className={df.errorBubble}>{error}</div>
+                            </div>
                         </div>
                     )}
 
-                    <div className="ring-form__footer">
-                        <Button primary type="submit" disabled={loading || !description.trim()}>
+                    <div className={df.footer}>
+                        <Button primary type="submit" disabled={loading}>
                             {loading ? 'Creating...' : 'Create Task'}
                         </Button>
                         <Button onClick={handleClose} disabled={loading}>

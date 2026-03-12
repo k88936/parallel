@@ -2,7 +2,6 @@ import {BrowserRouter, Navigate, Route, Routes} from 'react-router-dom';
 import {AppHeader, ProjectLayout} from './components/Layout';
 import {AlertProvider} from './components/Alerts';
 import {AgentsPage, ProjectPage, QueuePage, SettingsPage} from './pages';
-import styles from './App.module.css';
 import Theme, {ThemeProvider} from '@jetbrains/ring-ui-built/components/global/theme';
 
 export const App = () => {
@@ -10,7 +9,7 @@ export const App = () => {
         <ThemeProvider theme={Theme.DARK}>
             <AlertProvider>
                 <BrowserRouter>
-                    <div className={styles.app}>
+                    <div className="flex flex-row min-h-screen bg-[var(--ring-content-background-color,#1e1e1e)] text-[var(--ring-text-color,#fff)]">
                         <AppHeader />
                         <Routes>
                             <Route path="/" element={<Navigate to="/projects/root" replace />} />
