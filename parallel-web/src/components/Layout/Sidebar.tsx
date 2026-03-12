@@ -1,31 +1,45 @@
 import {useNavigate} from 'react-router-dom';
-import {useAppDispatch, useAppSelector} from '../../store/hooks';
+import type {Project} from '../../types';
 import {ProjectTree} from './ProjectTree';
 import styles from './Sidebar.module.css';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
 import Text from '@jetbrains/ring-ui-built/components/text/text';
 import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
-import {fetchProjectChildren, selectProject, toggleNode} from "../../store/slices/projectsSlice.ts";
 
-export const Sidebar = () => {
-    const dispatch = useAppDispatch();
+interface SidebarProps {
+    projects: Record<string, Project>;
+    childrenByParent: Record<string, string[]>;
+    selectedProjectId: string | null;
+    expandedNodes: string[];
+    loading: boolean;
+    error: string | null;
+    onNodeToggle: (projectId: string) => void;
+    onLoadChildren: (projectId: string) => Promise<void>;
+}
+
+export const Sidebar = ({
+    projects,
+    childrenByParent,
+    selectedProjectId,
+    expandedNodes,
+    loading,
+    error,
+    onNodeToggle,
+    onLoadChildren,
+}: SidebarProps) => {
     const navigate = useNavigate();
-    const {projects, selectedProjectId, loading} = useAppSelector(
-        (state) => state.projects
-    );
 
     const handleNodeClick = (projectId: string) => {
-        dispatch(selectProject(projectId));
         navigate(`/projects/${projectId}`);
     };
 
-    const handleNodeToggle = (projectId: string) => {
-        dispatch(toggleNode(projectId));
-    };
-
-    const handleLoadChildren = (projectId: string) => {
-        dispatch(fetchProjectChildren(projectId));
+    const handleNodeToggle = async (projectId: string) => {
+        const isExpanded = expandedNodes.includes(projectId);
+        onNodeToggle(projectId);
+        if (!isExpanded) {
+            await onLoadChildren(projectId);
+        }
     };
 
     return (
@@ -36,18 +50,27 @@ export const Sidebar = () => {
             <div className={styles.content}>
                 {loading ? (
                     <div className={styles.loading}>
-                        <Loader/>
+                        <Loader />
                         <Text>Loading...</Text>
                     </div>
-                ) :  (
+                ) : error && !projects.root ? (
+                    <div className={styles.loading}>
+                        <Text>{error}</Text>
+                    </div>
+                ) : projects.root ? (
                     <ProjectTree
-                        projectId={"root"}
+                        projectId="root"
                         projects={projects}
+                        childrenByParent={childrenByParent}
+                        expandedNodes={expandedNodes}
                         selectedId={selectedProjectId}
                         onNodeClick={handleNodeClick}
                         onNodeToggle={handleNodeToggle}
-                        onLoadChildren={handleLoadChildren}
                     />
+                ) : (
+                    <div className={styles.loading}>
+                        <Text>No projects available</Text>
+                    </div>
                 )}
             </div>
         </aside>

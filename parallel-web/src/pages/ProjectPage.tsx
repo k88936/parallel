@@ -1,9 +1,8 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
-import {useAppDispatch, useAppSelector} from '../store/hooks';
-import {selectProject, fetchProjectChildren, createProject, deleteProject, updateProject} from '../store/slices/projectsSlice';
-import {createTask, clearCreateError} from '../store/slices/tasksSlice';
-import type {Project, CreateProjectRequest, SshKeyConfig, RepoConfig, CreateTaskRequest} from '../types';
+import {projectsApi, tasksApi} from '../api';
+import {useProjectLayoutContext} from '../components/Layout';
+import type {CreateProjectRequest, CreateTaskRequest, Project, RepoConfig, SshKeyConfig} from '../types';
 import styles from './ProjectPage.module.css';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
@@ -27,12 +26,31 @@ import {CreateTaskDialog} from '../components/common/CreateTaskDialog';
 
 type TabId = 'overview' | 'settings' | 'repos' | 'tasks';
 
+const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return 'Request failed';
+};
+
 export const ProjectPage = () => {
-    const {projectId} = useParams<{ projectId: string }>();
+    const {projectId} = useParams<{projectId: string}>();
     const navigate = useNavigate();
-    const dispatch = useAppDispatch();
-    const {projects, childrenByParent, loading} = useAppSelector((state) => state.projects);
-    const {createLoading, createError} = useAppSelector((state) => state.tasks);
+    const {
+        projects,
+        childrenByParent,
+        loading,
+        error,
+        ensureProjectLoaded,
+        ensureChildrenLoaded,
+        refreshProject,
+        refreshChildren,
+        upsertProject,
+        removeProject,
+        expandNodes,
+    } = useProjectLayoutContext();
+
     const [activeTab, setActiveTab] = useState<TabId>('overview');
     const [showAddDialog, setShowAddDialog] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
@@ -43,126 +61,228 @@ export const ProjectPage = () => {
     const [editingRepo, setEditingRepo] = useState<RepoConfig | null>(null);
     const [deleteRepoTarget, setDeleteRepoTarget] = useState<RepoConfig | null>(null);
     const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+    const [pageLoading, setPageLoading] = useState(false);
+    const [pageError, setPageError] = useState<string | null>(null);
+    const [createLoading, setCreateLoading] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
 
     const actualProjectId = projectId;
     const project = actualProjectId ? projects[actualProjectId] : null;
-    const children = actualProjectId ? (childrenByParent[actualProjectId] || []) : [];
+    const children = actualProjectId ? childrenByParent[actualProjectId] || [] : [];
 
     useEffect(() => {
-        if (actualProjectId) {
-            dispatch(selectProject(actualProjectId));
-            if (!childrenByParent[actualProjectId]) {
-                dispatch(fetchProjectChildren(actualProjectId));
+        let isCancelled = false;
+
+        const loadProjectPage = async () => {
+            if (!actualProjectId) {
+                return;
             }
+
+            setPageLoading(true);
+            try {
+                let currentProject = await ensureProjectLoaded(actualProjectId);
+                const ancestorIds: string[] = [];
+
+                while (currentProject.parent_id) {
+                    ancestorIds.push(currentProject.parent_id);
+                    await ensureChildrenLoaded(currentProject.parent_id);
+                    currentProject = await ensureProjectLoaded(currentProject.parent_id);
+                }
+
+                expandNodes(ancestorIds);
+                await ensureChildrenLoaded(actualProjectId);
+
+                if (!isCancelled) {
+                    setPageError(null);
+                }
+            } catch (error) {
+                if (!isCancelled) {
+                    setPageError(getErrorMessage(error));
+                }
+            } finally {
+                if (!isCancelled) {
+                    setPageLoading(false);
+                }
+            }
+        };
+
+        void loadProjectPage();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [actualProjectId, ensureProjectLoaded, ensureChildrenLoaded, expandNodes]);
+
+    const breadcrumb = useMemo(() => {
+        if (!project) {
+            return [] as Array<{name: string; id: string | null}>;
         }
-    }, [actualProjectId, dispatch, childrenByParent]);
+
+        const parts: Array<{name: string; id: string | null}> = [];
+        let current: Project | null = project;
+        while (current) {
+            parts.unshift({name: current.name, id: current.id});
+            current = current.parent_id ? projects[current.parent_id] ?? null : null;
+        }
+        return parts;
+    }, [project, projects]);
+
+    const runProjectMutation = async <T,>(action: () => Promise<T>): Promise<T> => {
+        try {
+            setPageError(null);
+            return await action();
+        } catch (error) {
+            const message = getErrorMessage(error);
+            setPageError(message);
+            throw new Error(message);
+        }
+    };
+
+    if (!actualProjectId || pageLoading || (loading && !project)) {
+        return (
+            <div className={styles.loading}>
+                <Loader message="Loading project..." />
+            </div>
+        );
+    }
 
     if (!project) {
         return (
             <div className={styles.loading}>
-                <Loader message=
-                                  {loading ? 'Loading project...' : 'Project not found'}/>
+                <Text>{pageError || error || 'Project not found'}</Text>
             </div>
-        )
+        );
     }
 
-    const getBreadcrumb = () => {
-        const parts: { name: string; id: string | null }[] = [];
-        let current: Project | null = project;
-        while (current) {
-            parts.unshift({name: current.name, id: current.id});
-            current = current.parent_id ? projects[current.parent_id] : null;
-        }
-        return parts;
-    };
-
-    const breadcrumb = getBreadcrumb();
-
     const handleCreateSubproject = async (data: CreateProjectRequest) => {
-        await dispatch(createProject(data)).unwrap();
+        await runProjectMutation(async () => {
+            const response = await projectsApi.create(data);
+            await ensureProjectLoaded(response.project_id);
+            await refreshChildren(actualProjectId);
+        });
     };
 
     const handleDeleteSubproject = async () => {
-        if (deleteTarget) {
-            await dispatch(deleteProject(deleteTarget.id)).unwrap();
-            setDeleteTarget(null);
+        if (!deleteTarget) {
+            return;
         }
+
+        await runProjectMutation(async () => {
+            await projectsApi.delete(deleteTarget.id);
+            removeProject(deleteTarget.id, actualProjectId);
+            await refreshChildren(actualProjectId);
+            setDeleteTarget(null);
+        });
     };
 
     const handleAddSshKey = async (data: SshKeyConfig) => {
-        const updatedKeys = [...project.ssh_keys, data];
-        await dispatch(updateProject({
-            id: actualProjectId!,
-            data: {name: null, repos: null, ssh_keys: updatedKeys}
-        })).unwrap();
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: null,
+                ssh_keys: [...project.ssh_keys, data],
+            });
+            upsertProject(updatedProject);
+        });
     };
 
     const handleEditSshKey = async (data: SshKeyConfig) => {
-        const updatedKeys = project.ssh_keys.map(k => 
-            k.name === editingSshKey?.name ? data : k
-        );
-        await dispatch(updateProject({
-            id: actualProjectId!,
-            data: {name: null, repos: null, ssh_keys: updatedKeys}
-        })).unwrap();
-        setEditingSshKey(null);
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: null,
+                ssh_keys: project.ssh_keys.map((key) => (key.name === editingSshKey?.name ? data : key)),
+            });
+            upsertProject(updatedProject);
+            setEditingSshKey(null);
+        });
     };
 
     const handleDeleteSshKey = async () => {
-        if (deleteSshKeyTarget) {
-            const updatedKeys = project.ssh_keys.filter(k => k.name !== deleteSshKeyTarget.name);
-            await dispatch(updateProject({
-                id: actualProjectId!,
-                data: {name: null, repos: null, ssh_keys: updatedKeys}
-            })).unwrap();
-            setDeleteSshKeyTarget(null);
+        if (!deleteSshKeyTarget) {
+            return;
         }
+
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: null,
+                ssh_keys: project.ssh_keys.filter((key) => key.name !== deleteSshKeyTarget.name),
+            });
+            upsertProject(updatedProject);
+            setDeleteSshKeyTarget(null);
+        });
     };
 
     const handleAddRepo = async (data: RepoConfig) => {
-        const updatedRepos = [...project.repos, data];
-        await dispatch(updateProject({
-            id: actualProjectId!,
-            data: {name: null, repos: updatedRepos, ssh_keys: null}
-        })).unwrap();
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: [...project.repos, data],
+                ssh_keys: null,
+            });
+            upsertProject(updatedProject);
+        });
     };
 
     const handleEditRepo = async (data: RepoConfig) => {
-        const updatedRepos = project.repos.map(r => 
-            r.name === editingRepo?.name ? data : r
-        );
-        await dispatch(updateProject({
-            id: actualProjectId!,
-            data: {name: null, repos: updatedRepos, ssh_keys: null}
-        })).unwrap();
-        setEditingRepo(null);
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: project.repos.map((repo) => (repo.name === editingRepo?.name ? data : repo)),
+                ssh_keys: null,
+            });
+            upsertProject(updatedProject);
+            setEditingRepo(null);
+        });
     };
 
     const handleDeleteRepo = async () => {
-        if (deleteRepoTarget) {
-            const updatedRepos = project.repos.filter(r => r.name !== deleteRepoTarget.name);
-            await dispatch(updateProject({
-                id: actualProjectId!,
-                data: {name: null, repos: updatedRepos, ssh_keys: null}
-            })).unwrap();
-            setDeleteRepoTarget(null);
+        if (!deleteRepoTarget) {
+            return;
         }
+
+        await runProjectMutation(async () => {
+            const updatedProject = await projectsApi.update(actualProjectId, {
+                name: null,
+                repos: project.repos.filter((repo) => repo.name !== deleteRepoTarget.name),
+                ssh_keys: null,
+            });
+            upsertProject(updatedProject);
+            setDeleteRepoTarget(null);
+        });
     };
 
     const handleCreateTask = async (data: CreateTaskRequest) => {
-        await dispatch(createTask(data)).unwrap();
-        setShowCreateTaskDialog(false);
+        setCreateLoading(true);
+        setCreateError(null);
+        try {
+            await tasksApi.create(data);
+            setShowCreateTaskDialog(false);
+            await refreshProject(actualProjectId);
+        } catch (error) {
+            const message = getErrorMessage(error);
+            setCreateError(message);
+            throw new Error(message);
+        } finally {
+            setCreateLoading(false);
+        }
     };
 
     return (
         <div className={styles.container}>
+            {pageError && (
+                <div className={styles.breadcrumbWrapper}>
+                    <Text>{pageError}</Text>
+                </div>
+            )}
             <div className={styles.breadcrumbWrapper}>
                 <Breadcrumbs>
-                    {breadcrumb.map((part, i) => (
-                        <span key={part.id || i}>
+                    {breadcrumb.map((part, index) => (
+                        <span key={part.id || index}>
                             <span
                                 className={styles.breadcrumbLink}
-                                onClick={() => part.id && i < breadcrumb.length - 1 && navigate(`/projects/${part.id}`)}
+                                onClick={() => part.id && index < breadcrumb.length - 1 && navigate(`/projects/${part.id}`)}
                             >
                                 {part.name}
                             </span>
@@ -178,11 +298,7 @@ export const ProjectPage = () => {
                 </Button>
             </div>
 
-            <Tabs
-                onSelect={(key) => setActiveTab(key as TabId)}
-                selected={activeTab}
-                className={styles.tabs}
-            >
+            <Tabs onSelect={(key) => setActiveTab(key as TabId)} selected={activeTab} className={styles.tabs}>
                 <Tab id="overview" title="Overview">
                     <Island>
                         <IslandHeader border>
@@ -200,9 +316,7 @@ export const ProjectPage = () => {
                                 </div>
                                 <div className={styles.infoItem}>
                                     <Tag>Parent</Tag>
-                                    <Text>
-                                        {project.parent_id && projects[project.parent_id]?.name || 'None'}
-                                    </Text>
+                                    <Text>{(project.parent_id && projects[project.parent_id]?.name) || 'None'}</Text>
                                 </div>
                                 <div className={styles.infoItem}>
                                     <Tag>Subprojects</Tag>
@@ -222,28 +336,33 @@ export const ProjectPage = () => {
                                 <Text>No subprojects yet</Text>
                             ) : (
                                 <List
-                                    data={children.map(childId => {
-                                        const child = projects[childId];
-                                        if (!child) return undefined;
-                                        return {
-                                            rgItemType: Type.ITEM,
-                                            key: child.id,
-                                            label: child.name,
-                                            description: `${child.repos?.length || 0} repos`,
-                                            onClick: () => navigate(`/projects/${child.id}`),
-                                            rightNodes: (
-                                                <Button
-                                                    danger
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDeleteTarget(child);
-                                                    }}
-                                                >
-                                                    Delete
-                                                </Button>
-                                            )
-                                        };
-                                    }).filter((item): item is NonNullable<typeof item> => item !== undefined)}
+                                    data={children
+                                        .map((childId) => {
+                                            const child = projects[childId];
+                                            if (!child) {
+                                                return undefined;
+                                            }
+
+                                            return {
+                                                rgItemType: Type.ITEM,
+                                                key: child.id,
+                                                label: child.name,
+                                                description: `${child.repos.length} repos`,
+                                                onClick: () => navigate(`/projects/${child.id}`),
+                                                rightNodes: (
+                                                    <Button
+                                                        danger
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setDeleteTarget(child);
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </Button>
+                                                ),
+                                            };
+                                        })
+                                        .filter((item): item is NonNullable<typeof item> => item !== undefined)}
                                     onSelect={() => {}}
                                     onMouseOut={() => {}}
                                     onScrollToBottom={() => {}}
@@ -279,8 +398,8 @@ export const ProjectPage = () => {
                                         rightNodes: (
                                             <>
                                                 <Button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
                                                         setEditingSshKey(key);
                                                     }}
                                                 >
@@ -288,15 +407,15 @@ export const ProjectPage = () => {
                                                 </Button>
                                                 <Button
                                                     danger
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
                                                         setDeleteSshKeyTarget(key);
                                                     }}
                                                 >
                                                     Delete
                                                 </Button>
                                             </>
-                                        )
+                                        ),
                                     }))}
                                     onSelect={() => {}}
                                     onMouseOut={() => {}}
@@ -333,8 +452,8 @@ export const ProjectPage = () => {
                                         rightNodes: (
                                             <>
                                                 <Button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
                                                         setEditingRepo(repo);
                                                     }}
                                                 >
@@ -342,15 +461,15 @@ export const ProjectPage = () => {
                                                 </Button>
                                                 <Button
                                                     danger
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
                                                         setDeleteRepoTarget(repo);
                                                     }}
                                                 >
                                                     Delete
                                                 </Button>
                                             </>
-                                        )
+                                        ),
                                     }))}
                                     onSelect={() => {}}
                                     onMouseOut={() => {}}
@@ -372,9 +491,10 @@ export const ProjectPage = () => {
                     <Island>
                         <IslandHeader border>
                             <Heading level={3}>Tasks</Heading>
+                            <Button onClick={() => navigate(`/queue?projectId=${project.id}`)}>Open Queue</Button>
                         </IslandHeader>
                         <IslandContent>
-                            <Text>No tasks yet</Text>
+                            <Text>Use the queue view to inspect and manage tasks for this project.</Text>
                         </IslandContent>
                     </Island>
                 </Tab>
@@ -382,7 +502,7 @@ export const ProjectPage = () => {
 
             <SubprojectDialog
                 show={showAddDialog}
-                parentId={actualProjectId!}
+                parentId={actualProjectId}
                 onClose={() => setShowAddDialog(false)}
                 onSubmit={handleCreateSubproject}
             />
@@ -393,7 +513,7 @@ export const ProjectPage = () => {
                 description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
                 confirmLabel="Delete"
                 rejectLabel="Cancel"
-                onConfirm={handleDeleteSubproject}
+                onConfirm={() => void handleDeleteSubproject()}
                 onReject={() => setDeleteTarget(null)}
             />
 
@@ -416,7 +536,7 @@ export const ProjectPage = () => {
                 description={`Are you sure you want to delete SSH key "${deleteSshKeyTarget?.name}"? This action cannot be undone.`}
                 confirmLabel="Delete"
                 rejectLabel="Cancel"
-                onConfirm={handleDeleteSshKey}
+                onConfirm={() => void handleDeleteSshKey()}
                 onReject={() => setDeleteSshKeyTarget(null)}
             />
 
@@ -439,18 +559,18 @@ export const ProjectPage = () => {
                 description={`Are you sure you want to delete repository "${deleteRepoTarget?.name}"? This action cannot be undone.`}
                 confirmLabel="Delete"
                 rejectLabel="Cancel"
-                onConfirm={handleDeleteRepo}
+                onConfirm={() => void handleDeleteRepo()}
                 onReject={() => setDeleteRepoTarget(null)}
             />
 
             <CreateTaskDialog
                 show={showCreateTaskDialog}
-                projectId={actualProjectId!}
+                projectId={actualProjectId}
                 repos={project.repos}
                 sshKeys={project.ssh_keys}
                 onClose={() => {
                     setShowCreateTaskDialog(false);
-                    dispatch(clearCreateError());
+                    setCreateError(null);
                 }}
                 onSubmit={handleCreateTask}
                 loading={createLoading}

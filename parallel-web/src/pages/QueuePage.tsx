@@ -1,17 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import {
-    fetchTasks,
-    fetchReviewData,
-    cancelTask,
-    retryTask,
-    submitFeedback,
-    toggleExpand,
-    setFilters,
-    setPage,
-    collapseAll,
-} from '../store/slices/tasksSlice';
-import type { TaskStatus, TaskPriority, FeedbackType } from '../types';
+import {Fragment, useEffect, useMemo, useRef, useState} from 'react';
+import {useQueueSearchParams} from '../hooks/useQueueSearchParams';
+import {useTasksStore} from '../stores/useTasksStore';
+import type {FeedbackType, ListTasksQuery, TaskPriority, TaskStatus} from '../types';
 import styles from './QueuePage.module.css';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
@@ -26,25 +16,27 @@ import Select from '@jetbrains/ring-ui-built/components/select/select';
 import Input from '@jetbrains/ring-ui-built/components/input/input';
 import Confirm from '@jetbrains/ring-ui-built/components/confirm/confirm';
 
+const PAGE_SIZE = 20;
+
 const STATUS_OPTIONS = [
-    { key: '', label: 'All Statuses' },
-    { key: 'created', label: 'Created' },
-    { key: 'queued', label: 'Queued' },
-    { key: 'claimed', label: 'Claimed' },
-    { key: 'in_progress', label: 'In Progress' },
-    { key: 'awaiting_review', label: 'Awaiting Review' },
-    { key: 'pending_response', label: 'Pending Response' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'cancelled', label: 'Cancelled' },
-    { key: 'failed', label: 'Failed' },
+    {key: '', label: 'All Statuses'},
+    {key: 'created', label: 'Created'},
+    {key: 'queued', label: 'Queued'},
+    {key: 'claimed', label: 'Claimed'},
+    {key: 'in_progress', label: 'In Progress'},
+    {key: 'awaiting_review', label: 'Awaiting Review'},
+    {key: 'pending_response', label: 'Pending Response'},
+    {key: 'completed', label: 'Completed'},
+    {key: 'cancelled', label: 'Cancelled'},
+    {key: 'failed', label: 'Failed'},
 ];
 
 const PRIORITY_OPTIONS = [
-    { key: '', label: 'All Priorities' },
-    { key: 'low', label: 'Low' },
-    { key: 'normal', label: 'Normal' },
-    { key: 'high', label: 'High' },
-    { key: 'urgent', label: 'Urgent' },
+    {key: '', label: 'All Priorities'},
+    {key: 'low', label: 'Low'},
+    {key: 'normal', label: 'Normal'},
+    {key: 'high', label: 'High'},
+    {key: 'urgent', label: 'Urgent'},
 ];
 
 const getStatusColor = (status: TaskStatus): string => {
@@ -101,48 +93,57 @@ const formatTimeAgo = (dateStr: string): string => {
     return `${days}d`;
 };
 
-const shortenId = (id: string): string => {
-    return id.substring(0, 8);
-};
+const shortenId = (id: string): string => id.substring(0, 8);
 
 export const QueuePage = () => {
-    const dispatch = useAppDispatch();
-    const {
-        tasks,
-        total,
-        hasMore,
-        expandedTaskIds,
-        filters,
-        pagination,
-        reviewData,
-        loading,
-        reviewLoading,
-    } = useAppSelector((state) => state.tasks);
+    const {filters, page, selectedTaskId, setFilters, setPage, setSelectedTaskId} = useQueueSearchParams();
+    const tasks = useTasksStore((state) => state.tasks);
+    const total = useTasksStore((state) => state.total);
+    const hasMore = useTasksStore((state) => state.hasMore);
+    const reviewData = useTasksStore((state) => state.reviewData);
+    const reviewLoadingIds = useTasksStore((state) => state.reviewLoadingIds);
+    const loading = useTasksStore((state) => state.loading);
+    const error = useTasksStore((state) => state.error);
+    const fetchTasks = useTasksStore((state) => state.fetchTasks);
+    const refreshTasks = useTasksStore((state) => state.refreshTasks);
+    const fetchReviewData = useTasksStore((state) => state.fetchReviewData);
+    const cancelTask = useTasksStore((state) => state.cancelTask);
+    const retryTask = useTasksStore((state) => state.retryTask);
+    const submitFeedback = useTasksStore((state) => state.submitFeedback);
 
-    const [searchInput, setSearchInput] = useState(filters.search || '');
     const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
     const [retryConfirm, setRetryConfirm] = useState<string | null>(null);
-
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const currentSearch = filters.search || '';
+    const searchInputRef = useRef(currentSearch);
+    const appliedSearchRef = useRef(currentSearch);
 
-    const loadTasks = useCallback(() => {
-        const query = {
-            status: filters.status || null,
-            priority: filters.priority || null,
-            search: filters.search || null,
-            worker_id: filters.worker_id || undefined,
-            project_id: filters.project_id || undefined,
-            limit: pagination.limit,
-            offset: pagination.offset,
-        };
-        dispatch(fetchTasks(query));
-    }, [dispatch, filters, pagination.limit, pagination.offset]);
+    const query = useMemo<ListTasksQuery>(() => ({
+        status: filters.status ?? null,
+        priority: filters.priority ?? null,
+        repo_url: null,
+        worker_id: filters.worker_id,
+        search: filters.search ?? null,
+        sort_by: null,
+        sort_direction: null,
+        cursor: null,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+        project_id: filters.project_id,
+    }), [filters, page]);
 
     useEffect(() => {
-        loadTasks();
+        appliedSearchRef.current = currentSearch;
+        searchInputRef.current = currentSearch;
+    }, [currentSearch]);
 
+    useEffect(() => {
+        void fetchTasks(query);
+    }, [fetchTasks, query]);
+
+    useEffect(() => {
         pollIntervalRef.current = setInterval(() => {
-            loadTasks();
+            void refreshTasks();
         }, 5000);
 
         return () => {
@@ -150,85 +151,75 @@ export const QueuePage = () => {
                 clearInterval(pollIntervalRef.current);
             }
         };
-    }, [loadTasks]);
+    }, [refreshTasks]);
 
     useEffect(() => {
-        expandedTaskIds.forEach((taskId) => {
-            const task = tasks.find((t) => t.id === taskId);
-            if (task?.status === 'awaiting_review' && !reviewData[taskId]) {
-                dispatch(fetchReviewData(taskId));
-            }
-        });
-    }, [expandedTaskIds, tasks, reviewData, dispatch]);
+        if (!selectedTaskId) {
+            return;
+        }
 
-    const handleStatusChange = (option: { key: string } | null) => {
-        dispatch(setFilters({ status: (option?.key as TaskStatus) || undefined }));
+        const selectedTask = tasks.find((task) => task.id === selectedTaskId);
+        if (selectedTask?.status === 'awaiting_review' && !reviewData[selectedTaskId]) {
+            void fetchReviewData(selectedTaskId);
+        }
+    }, [fetchReviewData, reviewData, selectedTaskId, tasks]);
+
+    const handleStatusChange = (option: {key: string} | null) => {
+        setFilters({
+            ...filters,
+            status: option?.key ? option.key as TaskStatus : undefined,
+        });
     };
 
-    const handlePriorityChange = (option: { key: string } | null) => {
-        dispatch(setFilters({ priority: (option?.key as TaskPriority) || undefined }));
+    const handlePriorityChange = (option: {key: string} | null) => {
+        setFilters({
+            ...filters,
+            priority: option?.key ? option.key as TaskPriority : undefined,
+        });
     };
 
     const handleSearch = () => {
-        dispatch(setFilters({ search: searchInput || undefined }));
+        setFilters({
+            ...filters,
+            search: searchInputRef.current || undefined,
+        });
     };
 
-    const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+    const handleSearchKeyDown = (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter') {
             handleSearch();
         }
     };
 
-    const handleRefresh = () => {
-        loadTasks();
-    };
-
     const handleExpand = (taskId: string) => {
-        dispatch(toggleExpand(taskId));
-    };
-
-    const handleCancel = (taskId: string) => {
-        setCancelConfirm(taskId);
+        setSelectedTaskId(selectedTaskId === taskId ? null : taskId);
     };
 
     const handleCancelConfirm = async () => {
         if (cancelConfirm) {
-            await dispatch(cancelTask(cancelConfirm));
+            await cancelTask(cancelConfirm);
+            if (selectedTaskId === cancelConfirm) {
+                setSelectedTaskId(null);
+            }
             setCancelConfirm(null);
         }
     };
 
-    const handleRetry = (taskId: string) => {
-        setRetryConfirm(taskId);
-    };
-
     const handleRetryConfirm = async () => {
         if (retryConfirm) {
-            await dispatch(retryTask({ id: retryConfirm, clearReviewData: false }));
+            await retryTask(retryConfirm, false);
             setRetryConfirm(null);
         }
     };
 
     const handleFeedback = async (taskId: string, feedbackType: FeedbackType, message: string) => {
-        await dispatch(submitFeedback({ id: taskId, feedback: { feedback_type: feedbackType, message } }));
+        await submitFeedback(taskId, {feedback_type: feedbackType, message});
     };
 
-    const handlePrevPage = () => {
-        const newOffset = Math.max(0, pagination.offset - pagination.limit);
-        dispatch(setPage(Math.floor(newOffset / pagination.limit)));
-    };
-
-    const handleNextPage = () => {
-        if (hasMore) {
-            dispatch(setPage(Math.floor((pagination.offset + pagination.limit) / pagination.limit)));
-        }
-    };
-
-    const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
-    const totalPages = Math.ceil(total / pagination.limit);
-
-    const selectedStatusOption = STATUS_OPTIONS.find((o) => o.key === (filters.status || ''));
-    const selectedPriorityOption = PRIORITY_OPTIONS.find((o) => o.key === (filters.priority || ''));
+    const currentPage = page;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const selectedStatusOption = STATUS_OPTIONS.find((option) => option.key === (filters.status || ''));
+    const selectedPriorityOption = PRIORITY_OPTIONS.find((option) => option.key === (filters.priority || ''));
 
     return (
         <div className={styles.container}>
@@ -237,7 +228,7 @@ export const QueuePage = () => {
                     <div className={styles.headerRow}>
                         <Heading level={1}>Task Queue</Heading>
                         <div className={styles.headerActions}>
-                            <Button onClick={handleRefresh} disabled={loading}>
+                            <Button onClick={() => void refreshTasks()} disabled={loading}>
                                 Refresh
                             </Button>
                         </div>
@@ -264,18 +255,25 @@ export const QueuePage = () => {
                             />
                             <div className={styles.searchGroup}>
                                 <Input
-                                    value={searchInput}
-                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    key={currentSearch}
+                                    defaultValue={currentSearch}
+                                    onChange={(event) => {
+                                        searchInputRef.current = event.target.value;
+                                    }}
                                     onKeyDown={handleSearchKeyDown}
                                     placeholder="Search tasks..."
                                 />
                                 <Button onClick={handleSearch}>Search</Button>
                             </div>
                         </div>
-                        <Button onClick={() => dispatch(collapseAll())}>Collapse All</Button>
+                        <Button onClick={() => setSelectedTaskId(null)}>Collapse All</Button>
                     </div>
 
-                    {loading && tasks.length === 0 ? (
+                    {error && tasks.length === 0 ? (
+                        <div className={styles.empty}>
+                            <Text>{error}</Text>
+                        </div>
+                    ) : loading && tasks.length === 0 ? (
                         <div className={styles.empty}>
                             <Loader />
                         </div>
@@ -298,53 +296,41 @@ export const QueuePage = () => {
                                 </thead>
                                 <tbody>
                                     {tasks.map((task) => {
-                                        const isExpanded = expandedTaskIds.includes(task.id);
+                                        const isExpanded = selectedTaskId === task.id;
                                         const taskReviewData = reviewData[task.id];
+                                        const reviewLoading = reviewLoadingIds[task.id] ?? false;
 
                                         return (
-                                            <>
+                                            <Fragment key={task.id}>
                                                 <tr
-                                                    key={task.id}
                                                     className={`${styles.row} ${isExpanded ? styles.rowExpanded : ''}`}
                                                     onClick={() => handleExpand(task.id)}
                                                 >
                                                     <td className={styles.colExpand}>
-                                                        <span className={styles.expandIcon}>
-                                                            {isExpanded ? '▼' : '▶'}
-                                                        </span>
+                                                        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
                                                     </td>
                                                     <td className={styles.colId}>
                                                         <code>{shortenId(task.id)}</code>
                                                     </td>
                                                     <td className={styles.colTitle}>
-                                                        <div className={styles.titleCell}>
-                                                            {task.title}
-                                                        </div>
+                                                        <div className={styles.titleCell}>{task.title}</div>
                                                     </td>
                                                     <td className={styles.colStatus}>
-                                                        <Tag className={getStatusColor(task.status)}>
-                                                            {task.status.replace('_', ' ')}
-                                                        </Tag>
+                                                        <Tag className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</Tag>
                                                     </td>
                                                     <td className={styles.colPriority}>
-                                                        <Tag className={getPriorityColor(task.priority)}>
-                                                            {task.priority}
-                                                        </Tag>
+                                                        <Tag className={getPriorityColor(task.priority)}>{task.priority}</Tag>
                                                     </td>
-                                                    <td className={styles.colAge}>
-                                                        {formatTimeAgo(task.created_at)}
-                                                    </td>
+                                                    <td className={styles.colAge}>{formatTimeAgo(task.created_at)}</td>
                                                 </tr>
                                                 {isExpanded && (
-                                                    <tr key={`${task.id}-expanded`} className={styles.expandedRow}>
+                                                    <tr className={styles.expandedRow}>
                                                         <td colSpan={6}>
                                                             <div className={styles.expandedContent}>
                                                                 <div className={styles.detailGrid}>
                                                                     <div className={styles.detailItem}>
                                                                         <span className={styles.detailLabel}>Description</span>
-                                                                        <span className={styles.detailValue}>
-                                                                            {task.description || 'No description'}
-                                                                        </span>
+                                                                        <span className={styles.detailValue}>{task.description || 'No description'}</span>
                                                                     </div>
                                                                     <div className={styles.detailItem}>
                                                                         <span className={styles.detailLabel}>Repository</span>
@@ -374,21 +360,15 @@ export const QueuePage = () => {
                                                                     )}
                                                                     <div className={styles.detailItem}>
                                                                         <span className={styles.detailLabel}>Created</span>
-                                                                        <span className={styles.detailValue}>
-                                                                            {new Date(task.created_at).toLocaleString()}
-                                                                        </span>
+                                                                        <span className={styles.detailValue}>{new Date(task.created_at).toLocaleString()}</span>
                                                                     </div>
                                                                     <div className={styles.detailItem}>
                                                                         <span className={styles.detailLabel}>Updated</span>
-                                                                        <span className={styles.detailValue}>
-                                                                            {new Date(task.updated_at).toLocaleString()}
-                                                                        </span>
+                                                                        <span className={styles.detailValue}>{new Date(task.updated_at).toLocaleString()}</span>
                                                                     </div>
                                                                     <div className={styles.detailItem}>
                                                                         <span className={styles.detailLabel}>Max Execution</span>
-                                                                        <span className={styles.detailValue}>
-                                                                            {task.max_execution_time}s
-                                                                        </span>
+                                                                        <span className={styles.detailValue}>{task.max_execution_time}s</span>
                                                                     </div>
                                                                 </div>
 
@@ -396,21 +376,35 @@ export const QueuePage = () => {
                                                                     <div className={styles.labelsSection}>
                                                                         <span className={styles.detailLabel}>Required Labels</span>
                                                                         <div className={styles.labelTags}>
-                                                                            {Object.entries(task.required_labels).map(([key, value]) => (
-                                                                                <Tag key={key}>{key}: {value}</Tag>
+                                                                            {Object.entries(task.required_labels).map(([labelKey, labelValue]) => (
+                                                                                <Tag key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
                                                                             ))}
                                                                         </div>
                                                                     </div>
                                                                 )}
 
                                                                 <div className={styles.actionsRow}>
-                                                                    {(task.status === 'queued' || task.status === 'created' || task.status === 'in_progress' || task.status === 'claimed') && (
-                                                                        <Button danger onClick={(e) => { e.stopPropagation(); handleCancel(task.id); }}>
+                                                                    {(task.status === 'queued' ||
+                                                                        task.status === 'created' ||
+                                                                        task.status === 'in_progress' ||
+                                                                        task.status === 'claimed') && (
+                                                                        <Button
+                                                                            danger
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation();
+                                                                                setCancelConfirm(task.id);
+                                                                            }}
+                                                                        >
                                                                             Cancel
                                                                         </Button>
                                                                     )}
                                                                     {(task.status === 'failed' || task.status === 'cancelled') && (
-                                                                        <Button onClick={(e) => { e.stopPropagation(); handleRetry(task.id); }}>
+                                                                        <Button
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation();
+                                                                                setRetryConfirm(task.id);
+                                                                            }}
+                                                                        >
                                                                             Retry
                                                                         </Button>
                                                                     )}
@@ -427,17 +421,15 @@ export const QueuePage = () => {
                                                                                     <div className={styles.messagesSection}>
                                                                                         <Heading level={4}>Messages</Heading>
                                                                                         <div className={styles.messagesList}>
-                                                                                            {taskReviewData.messages.map((msg: { role: string; timestamp: string; content: string }, idx: number) => (
-                                                                                                <div key={idx} className={styles.messageItem}>
+                                                                                            {taskReviewData.messages.map((message, index) => (
+                                                                                                <div key={index} className={styles.messageItem}>
                                                                                                     <div className={styles.messageHeader}>
-                                                                                                        <Tag>{msg.role}</Tag>
+                                                                                                        <Tag>{message.role}</Tag>
                                                                                                         <span className={styles.messageTime}>
-                                                                                                            {new Date(msg.timestamp).toLocaleTimeString()}
+                                                                                                            {new Date(message.timestamp).toLocaleTimeString()}
                                                                                                         </span>
                                                                                                     </div>
-                                                                                                    <div className={styles.messageContent}>
-                                                                                                        {msg.content}
-                                                                                                    </div>
+                                                                                                    <div className={styles.messageContent}>{message.content}</div>
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
@@ -446,29 +438,19 @@ export const QueuePage = () => {
                                                                                 {taskReviewData.diff && (
                                                                                     <div className={styles.diffSection}>
                                                                                         <Heading level={4}>Diff</Heading>
-                                                                                        <pre className={styles.diffContent}>
-                                                                                            {taskReviewData.diff}
-                                                                                        </pre>
+                                                                                        <pre className={styles.diffContent}>{taskReviewData.diff}</pre>
                                                                                     </div>
                                                                                 )}
                                                                                 <div className={styles.feedbackForm}>
                                                                                     <Heading level={4}>Provide Feedback</Heading>
                                                                                     <div className={styles.feedbackButtons}>
-                                                                                        <Button
-                                                                                            primary
-                                                                                            onClick={() => handleFeedback(task.id, 'approve', 'Approved')}
-                                                                                        >
+                                                                                        <Button primary onClick={() => void handleFeedback(task.id, 'approve', 'Approved')}>
                                                                                             Approve
                                                                                         </Button>
-                                                                                        <Button
-                                                                                            onClick={() => handleFeedback(task.id, 'request_changes', 'Changes requested')}
-                                                                                        >
+                                                                                        <Button onClick={() => void handleFeedback(task.id, 'request_changes', 'Changes requested')}>
                                                                                             Request Changes
                                                                                         </Button>
-                                                                                        <Button
-                                                                                            danger
-                                                                                            onClick={() => handleFeedback(task.id, 'abort', 'Task aborted')}
-                                                                                        >
+                                                                                        <Button danger onClick={() => void handleFeedback(task.id, 'abort', 'Task aborted')}>
                                                                                             Abort
                                                                                         </Button>
                                                                                     </div>
@@ -483,7 +465,7 @@ export const QueuePage = () => {
                                                         </td>
                                                     </tr>
                                                 )}
-                                            </>
+                                            </Fragment>
                                         );
                                     })}
                                 </tbody>
@@ -493,13 +475,13 @@ export const QueuePage = () => {
 
                     {total > 0 && (
                         <div className={styles.pagination}>
-                            <Button disabled={pagination.offset === 0} onClick={handlePrevPage}>
+                            <Button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
                                 Previous
                             </Button>
                             <Text>
                                 Page {currentPage} of {totalPages} ({total} total)
                             </Text>
-                            <Button disabled={!hasMore} onClick={handleNextPage}>
+                            <Button disabled={!hasMore} onClick={() => setPage(currentPage + 1)}>
                                 Next
                             </Button>
                         </div>
@@ -512,7 +494,7 @@ export const QueuePage = () => {
                 text="Are you sure you want to cancel this task?"
                 confirmLabel="Cancel Task"
                 rejectLabel="Keep Running"
-                onConfirm={handleCancelConfirm}
+                onConfirm={() => void handleCancelConfirm()}
                 onReject={() => setCancelConfirm(null)}
             />
 
@@ -521,7 +503,7 @@ export const QueuePage = () => {
                 text="Are you sure you want to retry this task?"
                 confirmLabel="Retry Task"
                 rejectLabel="Cancel"
-                onConfirm={handleRetryConfirm}
+                onConfirm={() => void handleRetryConfirm()}
                 onReject={() => setRetryConfirm(null)}
             />
         </div>

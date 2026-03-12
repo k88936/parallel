@@ -22,6 +22,6 @@ cargo build
 * crates/message-broker: a tiny websocket-based message-broker
 * crates/server: server proc
 * crates/worker: worker proc
-* parallel-web: React/Vite frontend with Ring UI
+* parallel-web/AGENTS.md: React/Vite frontend with Ring UI
 
 * More detailed instructions (AGENT.md) are under a specific dir's root.

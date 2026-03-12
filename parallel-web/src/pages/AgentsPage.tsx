@@ -1,12 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import {
-    fetchWorkers,
-    fetchWorkerInfo,
-    fetchWorkerResources,
-    selectWorker,
-} from '../store/slices/workersSlice';
-import type { WorkerStatus } from '../types';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {workersApi} from '../api';
+import type {ResourceMonitor, WorkerInfo, WorkerStatus, WorkerSummary} from '../types';
 import styles from './AgentsPage.module.css';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
@@ -53,24 +47,67 @@ const getResourceLevel = (percent: number): string => {
     return styles.high;
 };
 
+const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return 'Request failed';
+};
+
 export const AgentsPage = () => {
-    const dispatch = useAppDispatch();
-    const {
-        workers,
-        selectedWorkerId,
-        selectedWorkerInfo,
-        selectedWorkerResources,
-        loading,
-        infoLoading,
-    } = useAppSelector((state) => state.workers);
+    const [workers, setWorkers] = useState<WorkerSummary[]>([]);
+    const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+    const [selectedWorkerInfo, setSelectedWorkerInfo] = useState<WorkerInfo | null>(null);
+    const [selectedWorkerResources, setSelectedWorkerResources] = useState<ResourceMonitor | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [infoLoading, setInfoLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    const loadWorkers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const nextWorkers = await workersApi.list();
+            setWorkers(nextWorkers);
+            setError(null);
+            setSelectedWorkerId((current) => {
+                if (!current) {
+                    return nextWorkers[0]?.id ?? null;
+                }
+
+                return nextWorkers.some((worker) => worker.id === current) ? current : nextWorkers[0]?.id ?? null;
+            });
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const loadSelectedWorkerDetails = useCallback(async (workerId: string) => {
+        setInfoLoading(true);
+        try {
+            const [workerInfo, workerResources] = await Promise.all([
+                workersApi.getInfo(workerId),
+                workersApi.getResources(workerId),
+            ]);
+            setSelectedWorkerInfo(workerInfo);
+            setSelectedWorkerResources(workerResources);
+            setError(null);
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setInfoLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
-        dispatch(fetchWorkers());
+        void loadWorkers();
 
         pollIntervalRef.current = setInterval(() => {
-            dispatch(fetchWorkers());
+            void loadWorkers();
         }, 5000);
 
         return () => {
@@ -78,35 +115,41 @@ export const AgentsPage = () => {
                 clearInterval(pollIntervalRef.current);
             }
         };
-    }, [dispatch]);
+    }, [loadWorkers]);
 
     useEffect(() => {
-        if (selectedWorkerId) {
-            dispatch(fetchWorkerInfo(selectedWorkerId));
-            dispatch(fetchWorkerResources(selectedWorkerId));
+        if (!selectedWorkerId) {
+            setSelectedWorkerInfo(null);
+            setSelectedWorkerResources(null);
+            return;
         }
-    }, [selectedWorkerId, dispatch]);
+
+        void loadSelectedWorkerDetails(selectedWorkerId);
+    }, [loadSelectedWorkerDetails, selectedWorkerId]);
 
     useEffect(() => {
-        if (pollIntervalRef.current && selectedWorkerId) {
+        if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = setInterval(() => {
-                dispatch(fetchWorkers());
-                dispatch(fetchWorkerInfo(selectedWorkerId));
-                dispatch(fetchWorkerResources(selectedWorkerId));
-            }, 5000);
         }
-    }, [selectedWorkerId, dispatch]);
 
-    const handleWorkerClick = (workerId: string) => {
-        dispatch(selectWorker(workerId));
-    };
+        pollIntervalRef.current = setInterval(() => {
+            void loadWorkers();
+            if (selectedWorkerId) {
+                void loadSelectedWorkerDetails(selectedWorkerId);
+            }
+        }, 5000);
 
-    const handleRefresh = () => {
-        dispatch(fetchWorkers());
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+            }
+        };
+    }, [loadSelectedWorkerDetails, loadWorkers, selectedWorkerId]);
+
+    const handleRefresh = async () => {
+        await loadWorkers();
         if (selectedWorkerId) {
-            dispatch(fetchWorkerInfo(selectedWorkerId));
-            dispatch(fetchWorkerResources(selectedWorkerId));
+            await loadSelectedWorkerDetails(selectedWorkerId);
         }
     };
 
@@ -115,12 +158,16 @@ export const AgentsPage = () => {
             <aside className={styles.sidebar}>
                 <div className={styles.sidebarHeader}>
                     <Heading level={3}>Agents</Heading>
-                    <Button onClick={handleRefresh} disabled={loading}>
+                    <Button onClick={() => void handleRefresh()} disabled={loading}>
                         Refresh
                     </Button>
                 </div>
                 <div className={styles.sidebarContent}>
-                    {loading && workers.length === 0 ? (
+                    {error && workers.length === 0 ? (
+                        <div className={styles.empty}>
+                            <Text>{error}</Text>
+                        </div>
+                    ) : loading && workers.length === 0 ? (
                         <div className={styles.empty}>
                             <Loader />
                         </div>
@@ -133,30 +180,16 @@ export const AgentsPage = () => {
                             {workers.map((worker) => (
                                 <div
                                     key={worker.id}
-                                    className={`${styles.workerItem} ${
-                                        selectedWorkerId === worker.id
-                                            ? styles.selected
-                                            : ''
-                                    }`}
-                                    onClick={() => handleWorkerClick(worker.id)}
+                                    className={`${styles.workerItem} ${selectedWorkerId === worker.id ? styles.selected : ''}`}
+                                    onClick={() => setSelectedWorkerId(worker.id)}
                                 >
-                                    <div
-                                        className={`${styles.statusDot} ${getStatusColor(
-                                            worker.status
-                                        )}`}
-                                    />
+                                    <div className={`${styles.statusDot} ${getStatusColor(worker.status)}`} />
                                     <div className={styles.workerInfo}>
-                                        <div className={styles.workerName}>
-                                            {worker.name}
-                                        </div>
+                                        <div className={styles.workerName}>{worker.name}</div>
                                         <div className={styles.workerMeta}>
                                             <span>{worker.status}</span>
-                                            <span>
-                                                Tasks: {worker.current_task_count}
-                                            </span>
-                                            <span>
-                                                {formatTimeAgo(worker.last_heartbeat)}
-                                            </span>
+                                            <span>Tasks: {worker.current_task_count}</span>
+                                            <span>{formatTimeAgo(worker.last_heartbeat)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -177,6 +210,11 @@ export const AgentsPage = () => {
                     </div>
                 ) : selectedWorkerInfo ? (
                     <div className={styles.detailContent}>
+                        {error && (
+                            <div className={styles.empty}>
+                                <Text>{error}</Text>
+                            </div>
+                        )}
                         <div className={styles.topRow}>
                             <Island>
                                 <IslandHeader border>
@@ -186,43 +224,27 @@ export const AgentsPage = () => {
                                     <div className={styles.infoGrid}>
                                         <div className={styles.infoItem}>
                                             <div className={styles.infoLabel}>Name</div>
-                                            <div className={styles.infoValue}>
-                                                {selectedWorkerInfo.name}
-                                            </div>
+                                            <div className={styles.infoValue}>{selectedWorkerInfo.name}</div>
                                         </div>
                                         <div className={styles.infoItem}>
                                             <div className={styles.infoLabel}>ID</div>
-                                            <div className={styles.infoValue}>
-                                                {selectedWorkerInfo.id.substring(0, 8)}...
-                                            </div>
+                                            <div className={styles.infoValue}>{selectedWorkerInfo.id.substring(0, 8)}...</div>
                                         </div>
                                         <div className={styles.infoItem}>
                                             <div className={styles.infoLabel}>Status</div>
-                                            <div className={styles.infoValue}>
-                                                {selectedWorkerInfo.status}
-                                            </div>
+                                            <div className={styles.infoValue}>{selectedWorkerInfo.status}</div>
                                         </div>
                                         <div className={styles.infoItem}>
-                                            <div className={styles.infoLabel}>
-                                                Max Concurrent
-                                            </div>
-                                            <div className={styles.infoValue}>
-                                                {selectedWorkerInfo.max_concurrent}
-                                            </div>
+                                            <div className={styles.infoLabel}>Max Concurrent</div>
+                                            <div className={styles.infoValue}>{selectedWorkerInfo.max_concurrent}</div>
                                         </div>
                                         <div className={styles.infoItem}>
                                             <div className={styles.infoLabel}>Has Git</div>
-                                            <div className={styles.infoValue}>
-                                                {selectedWorkerInfo.capabilities.has_git
-                                                    ? 'Yes'
-                                                    : 'No'}
-                                            </div>
+                                            <div className={styles.infoValue}>{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
                                         </div>
                                         <div className={styles.infoItem}>
                                             <div className={styles.infoLabel}>Last Heartbeat</div>
-                                            <div className={styles.infoValue}>
-                                                {formatTimeAgo(selectedWorkerInfo.last_heartbeat)}
-                                            </div>
+                                            <div className={styles.infoValue}>{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
                                         </div>
                                     </div>
                                 </IslandContent>
@@ -237,21 +259,12 @@ export const AgentsPage = () => {
                                         <div className={styles.resourceRow}>
                                             <div className={styles.resourceLabel}>
                                                 <span>CPU</span>
-                                                <span>
-                                                    {selectedWorkerResources.cpu_usage_percent.toFixed(
-                                                        1
-                                                    )}
-                                                    %
-                                                </span>
+                                                <span>{selectedWorkerResources.cpu_usage_percent.toFixed(1)}%</span>
                                             </div>
                                             <div className={styles.resourceBar}>
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(
-                                                        selectedWorkerResources.cpu_usage_percent
-                                                    )}`}
-                                                    style={{
-                                                        width: `${selectedWorkerResources.cpu_usage_percent}%`,
-                                                    }}
+                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.cpu_usage_percent)}`}
+                                                    style={{width: `${selectedWorkerResources.cpu_usage_percent}%`}}
                                                 />
                                             </div>
                                         </div>
@@ -260,22 +273,14 @@ export const AgentsPage = () => {
                                             <div className={styles.resourceLabel}>
                                                 <span>Memory</span>
                                                 <span>
-                                                    {selectedWorkerResources.memory_used_mb}MB /{' '}
-                                                    {selectedWorkerResources.memory_total_mb}MB (
-                                                    {selectedWorkerResources.memory_usage_percent.toFixed(
-                                                        1
-                                                    )}
-                                                    %)
+                                                    {selectedWorkerResources.memory_used_mb}MB / {selectedWorkerResources.memory_total_mb}MB (
+                                                    {selectedWorkerResources.memory_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
                                             <div className={styles.resourceBar}>
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(
-                                                        selectedWorkerResources.memory_usage_percent
-                                                    )}`}
-                                                    style={{
-                                                        width: `${selectedWorkerResources.memory_usage_percent}%`,
-                                                    }}
+                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.memory_usage_percent)}`}
+                                                    style={{width: `${selectedWorkerResources.memory_usage_percent}%`}}
                                                 />
                                             </div>
                                         </div>
@@ -284,28 +289,14 @@ export const AgentsPage = () => {
                                             <div className={styles.resourceLabel}>
                                                 <span>Disk</span>
                                                 <span>
-                                                    {selectedWorkerResources.disk_used_gb.toFixed(
-                                                        1
-                                                    )}
-                                                    GB /{' '}
-                                                    {selectedWorkerResources.disk_total_gb.toFixed(
-                                                        1
-                                                    )}
-                                                    GB (
-                                                    {selectedWorkerResources.disk_usage_percent.toFixed(
-                                                        1
-                                                    )}
-                                                    %)
+                                                    {selectedWorkerResources.disk_used_gb.toFixed(1)}GB / {selectedWorkerResources.disk_total_gb.toFixed(1)}GB (
+                                                    {selectedWorkerResources.disk_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
                                             <div className={styles.resourceBar}>
                                                 <div
-                                                    className={`${styles.resourceBarFill} ${getResourceLevel(
-                                                        selectedWorkerResources.disk_usage_percent
-                                                    )}`}
-                                                    style={{
-                                                        width: `${selectedWorkerResources.disk_usage_percent}%`,
-                                                    }}
+                                                    className={`${styles.resourceBarFill} ${getResourceLevel(selectedWorkerResources.disk_usage_percent)}`}
+                                                    style={{width: `${selectedWorkerResources.disk_usage_percent}%`}}
                                                 />
                                             </div>
                                         </div>
@@ -321,24 +312,18 @@ export const AgentsPage = () => {
                                     <div className={styles.infoItem}>
                                         <div className={styles.infoLabel}>Available Agents</div>
                                         <div className={styles.capabilityList}>
-                                            {selectedWorkerInfo.capabilities.available_agents
-                                                .length > 0 ? (
-                                                selectedWorkerInfo.capabilities.available_agents.map(
-                                                    (agent) => <Tag key={agent}>{agent}</Tag>
-                                                )
+                                            {selectedWorkerInfo.capabilities.available_agents.length > 0 ? (
+                                                selectedWorkerInfo.capabilities.available_agents.map((agent) => <Tag key={agent}>{agent}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
                                         </div>
                                     </div>
-                                    <div className={styles.infoItem} style={{ marginTop: 12 }}>
+                                    <div className={styles.infoItem} style={{marginTop: 12}}>
                                         <div className={styles.infoLabel}>Supported Languages</div>
                                         <div className={styles.capabilityList}>
-                                            {selectedWorkerInfo.capabilities.supported_languages
-                                                .length > 0 ? (
-                                                selectedWorkerInfo.capabilities.supported_languages.map(
-                                                    (lang) => <Tag key={lang}>{lang}</Tag>
-                                                )
+                                            {selectedWorkerInfo.capabilities.supported_languages.length > 0 ? (
+                                                selectedWorkerInfo.capabilities.supported_languages.map((language) => <Tag key={language}>{language}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
@@ -360,9 +345,7 @@ export const AgentsPage = () => {
                                     ) : (
                                         <div className={styles.capabilityList}>
                                             {selectedWorkerInfo.current_tasks.map((taskId) => (
-                                                <Tag key={taskId}>
-                                                    {taskId.substring(0, 8)}...
-                                                </Tag>
+                                                <Tag key={taskId}>{taskId.substring(0, 8)}...</Tag>
                                             ))}
                                         </div>
                                     )}

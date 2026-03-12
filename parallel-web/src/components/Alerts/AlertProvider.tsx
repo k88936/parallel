@@ -1,28 +1,28 @@
-import { useEffect, useCallback, useRef } from 'react';
-import { useDispatch } from 'react-redux';
+import {useCallback, useEffect, useRef} from 'react';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import type { AlertPayload } from '../../types';
-import { useAppSelector } from '../../store/hooks';
+import type {AlertPayload} from '../../types';
+import {AlertPreferencesProvider, useAlertPreferences} from '../../contexts/AlertContext';
 import {
     alertWebSocketService,
     getAlertMessage,
     getSeverityLevel,
     getVoiceAlertMessage,
+    shouldPlayVoiceAlert,
 } from '../../services/alertService';
-import { addAlert } from '../../store/slices/alertsSlice';
 
-export function AlertProvider({ children }: { children: React.ReactNode }) {
-    const dispatch = useDispatch();
-    const { voiceEnabled } = useAppSelector((state) => state.alerts);
+const AlertListener = ({children}: {children: React.ReactNode}) => {
+    const {voiceEnabled} = useAlertPreferences();
     const speechSynthRef = useRef<SpeechSynthesis | null>(null);
 
     const speak = useCallback((text: string) => {
-        if (!voiceEnabled || !text) return;
-        
+        if (!voiceEnabled || !text || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+            return;
+        }
+
         if (!speechSynthRef.current) {
             speechSynthRef.current = window.speechSynthesis;
         }
-        
+
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
@@ -31,11 +31,9 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     }, [voiceEnabled]);
 
     const handleAlert = useCallback((payload: AlertPayload) => {
-        dispatch(addAlert(payload));
-        
         const message = getAlertMessage(payload.alert);
         const severity = getSeverityLevel(payload.severity);
-        
+
         switch (severity) {
             case 'error':
                 alertService.error(message, 5000);
@@ -46,17 +44,19 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
             default:
                 alertService.message(message, 5000);
         }
-        
-        const voiceMessage = getVoiceAlertMessage(payload.alert);
-        if (voiceMessage) {
-            speak(voiceMessage);
+
+        if (voiceEnabled && shouldPlayVoiceAlert(payload.severity)) {
+            const voiceMessage = getVoiceAlertMessage(payload.alert);
+            if (voiceMessage) {
+                speak(voiceMessage);
+            }
         }
-    }, [dispatch, speak]);
+    }, [speak, voiceEnabled]);
 
     useEffect(() => {
         alertWebSocketService.connect();
         const unsubscribe = alertWebSocketService.subscribe(handleAlert);
-        
+
         return () => {
             unsubscribe();
             alertWebSocketService.disconnect();
@@ -64,4 +64,12 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     }, [handleAlert]);
 
     return <>{children}</>;
+};
+
+export function AlertProvider({children}: {children: React.ReactNode}) {
+    return (
+        <AlertPreferencesProvider>
+            <AlertListener>{children}</AlertListener>
+        </AlertPreferencesProvider>
+    );
 }

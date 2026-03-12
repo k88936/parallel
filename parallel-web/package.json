@@ -12,7 +12,6 @@
   "dependencies": {
     "@jetbrains/icons": "^5.19.0",
     "@jetbrains/ring-ui-built": "^7.0.97",
-    "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.13.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
