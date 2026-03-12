@@ -15,6 +15,8 @@ import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import Select from '@jetbrains/ring-ui-built/components/select/select';
 import Input from '@jetbrains/ring-ui-built/components/input/input';
 import Confirm from '@jetbrains/ring-ui-built/components/confirm/confirm';
+import ButtonGroup from "@jetbrains/ring-ui-built/components/button-group/button-group";
+import Group from "@jetbrains/ring-ui-built/components/group/group";
 
 const PAGE_SIZE = 20;
 
@@ -164,14 +166,14 @@ export const QueuePage = () => {
         }
     }, [fetchReviewData, reviewData, selectedTaskId, tasks]);
 
-    const handleStatusChange = (option: {key: string} | null) => {
+    const handleStatusChange = (option: { key: string } | null) => {
         setFilters({
             ...filters,
             status: option?.key ? option.key as TaskStatus : undefined,
         });
     };
 
-    const handlePriorityChange = (option: {key: string} | null) => {
+    const handlePriorityChange = (option: { key: string } | null) => {
         setFilters({
             ...filters,
             priority: option?.key ? option.key as TaskPriority : undefined,
@@ -225,18 +227,11 @@ export const QueuePage = () => {
         <div className={styles.container}>
             <Island>
                 <IslandHeader border>
-                    <div className={styles.headerRow}>
-                        <Heading level={1}>Task Queue</Heading>
-                        <div className={styles.headerActions}>
-                            <Button onClick={() => void refreshTasks()} disabled={loading}>
-                                Refresh
-                            </Button>
-                        </div>
-                    </div>
+                    <Heading level={1}>Task Queue</Heading>
                 </IslandHeader>
                 <IslandContent>
-                    <div className={styles.filterBar}>
-                        <div className={styles.filterGroup}>
+                    <Group className={"flex justify-between"}>
+                        <Group className={"flex"}>
                             <Select
                                 data={STATUS_OPTIONS}
                                 selected={selectedStatusOption}
@@ -253,21 +248,26 @@ export const QueuePage = () => {
                                 clear
                                 type={Select.Type.INLINE}
                             />
-                            <div className={styles.searchGroup}>
-                                <Input
-                                    key={currentSearch}
-                                    defaultValue={currentSearch}
-                                    onChange={(event) => {
-                                        searchInputRef.current = event.target.value;
-                                    }}
-                                    onKeyDown={handleSearchKeyDown}
-                                    placeholder="Search tasks..."
-                                />
-                                <Button onClick={handleSearch}>Search</Button>
-                            </div>
-                        </div>
-                        <Button onClick={() => setSelectedTaskId(null)}>Collapse All</Button>
-                    </div>
+                            <Input
+                                key={currentSearch}
+                                defaultValue={currentSearch}
+                                onChange={(event) => {
+                                    searchInputRef.current = event.target.value;
+                                }}
+                                onKeyDown={handleSearchKeyDown}
+                                placeholder="Search tasks..."
+                            />
+                            <Button onClick={handleSearch}>Search</Button>
+
+                        </Group>
+
+                        <ButtonGroup>
+                            <Button onClick={() => setSelectedTaskId(null)}>Collapse All</Button>
+                            <Button onClick={() => void refreshTasks()} disabled={loading}>
+                                Refresh
+                            </Button>
+                        </ButtonGroup>
+                    </Group>
 
                     {error && tasks.length === 0 ? (
                         <div className={styles.empty}>
@@ -275,7 +275,7 @@ export const QueuePage = () => {
                         </div>
                     ) : loading && tasks.length === 0 ? (
                         <div className={styles.empty}>
-                            <Loader />
+                            <Loader/>
                         </div>
                     ) : tasks.length === 0 ? (
                         <div className={styles.empty}>
@@ -285,189 +285,214 @@ export const QueuePage = () => {
                         <div className={styles.tableContainer}>
                             <table className={styles.table}>
                                 <thead>
-                                    <tr>
-                                        <th className={styles.colExpand}></th>
-                                        <th className={styles.colId}>ID</th>
-                                        <th className={styles.colTitle}>Title</th>
-                                        <th className={styles.colStatus}>Status</th>
-                                        <th className={styles.colPriority}>Priority</th>
-                                        <th className={styles.colAge}>Age</th>
-                                    </tr>
+                                <tr>
+                                    <th className={styles.colExpand}></th>
+                                    <th className={styles.colId}>ID</th>
+                                    <th className={styles.colTitle}>Title</th>
+                                    <th className={styles.colStatus}>Status</th>
+                                    <th className={styles.colPriority}>Priority</th>
+                                    <th className={styles.colAge}>Age</th>
+                                </tr>
                                 </thead>
                                 <tbody>
-                                    {tasks.map((task) => {
-                                        const isExpanded = selectedTaskId === task.id;
-                                        const taskReviewData = reviewData[task.id];
-                                        const reviewLoading = reviewLoadingIds[task.id] ?? false;
+                                {tasks.map((task) => {
+                                    const isExpanded = selectedTaskId === task.id;
+                                    const taskReviewData = reviewData[task.id];
+                                    const reviewLoading = reviewLoadingIds[task.id] ?? false;
 
-                                        return (
-                                            <Fragment key={task.id}>
-                                                <tr
-                                                    className={`${styles.row} ${isExpanded ? styles.rowExpanded : ''}`}
-                                                    onClick={() => handleExpand(task.id)}
-                                                >
-                                                    <td className={styles.colExpand}>
-                                                        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
-                                                    </td>
-                                                    <td className={styles.colId}>
-                                                        <code>{shortenId(task.id)}</code>
-                                                    </td>
-                                                    <td className={styles.colTitle}>
-                                                        <div className={styles.titleCell}>{task.title}</div>
-                                                    </td>
-                                                    <td className={styles.colStatus}>
-                                                        <Tag className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</Tag>
-                                                    </td>
-                                                    <td className={styles.colPriority}>
-                                                        <Tag className={getPriorityColor(task.priority)}>{task.priority}</Tag>
-                                                    </td>
-                                                    <td className={styles.colAge}>{formatTimeAgo(task.created_at)}</td>
-                                                </tr>
-                                                {isExpanded && (
-                                                    <tr className={styles.expandedRow}>
-                                                        <td colSpan={6}>
-                                                            <div className={styles.expandedContent}>
-                                                                <div className={styles.detailGrid}>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Description</span>
-                                                                        <span className={styles.detailValue}>{task.description || 'No description'}</span>
-                                                                    </div>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Repository</span>
-                                                                        <span className={styles.detailValue}>
+                                    return (
+                                        <Fragment key={task.id}>
+                                            <tr
+                                                className={`${styles.row} ${isExpanded ? styles.rowExpanded : ''}`}
+                                                onClick={() => handleExpand(task.id)}
+                                            >
+                                                <td className={styles.colExpand}>
+                                                    <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+                                                </td>
+                                                <td className={styles.colId}>
+                                                    <code>{shortenId(task.id)}</code>
+                                                </td>
+                                                <td className={styles.colTitle}>
+                                                    <div className={styles.titleCell}>{task.title}</div>
+                                                </td>
+                                                <td className={styles.colStatus}>
+                                                    <Tag
+                                                        className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</Tag>
+                                                </td>
+                                                <td className={styles.colPriority}>
+                                                    <Tag
+                                                        className={getPriorityColor(task.priority)}>{task.priority}</Tag>
+                                                </td>
+                                                <td className={styles.colAge}>{formatTimeAgo(task.created_at)}</td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr className={styles.expandedRow}>
+                                                    <td colSpan={6}>
+                                                        <div className={styles.expandedContent}>
+                                                            <div className={styles.detailGrid}>
+                                                                <div className={styles.detailItem}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Description</span>
+                                                                    <span
+                                                                        className={styles.detailValue}>{task.description || 'No description'}</span>
+                                                                </div>
+                                                                <div className={styles.detailItem}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Repository</span>
+                                                                    <span className={styles.detailValue}>
                                                                             <code>{task.repo_url}</code>
                                                                         </span>
-                                                                    </div>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Base Branch</span>
-                                                                        <span className={styles.detailValue}>
+                                                                </div>
+                                                                <div className={styles.detailItem}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Base Branch</span>
+                                                                    <span className={styles.detailValue}>
                                                                             <code>{task.base_branch}</code>
                                                                         </span>
-                                                                    </div>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Target Branch</span>
-                                                                        <span className={styles.detailValue}>
+                                                                </div>
+                                                                <div className={styles.detailItem}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Target Branch</span>
+                                                                    <span className={styles.detailValue}>
                                                                             <code>{task.target_branch}</code>
                                                                         </span>
-                                                                    </div>
-                                                                    {task.claimed_by && (
-                                                                        <div className={styles.detailItem}>
-                                                                            <span className={styles.detailLabel}>Worker</span>
-                                                                            <span className={styles.detailValue}>
+                                                                </div>
+                                                                {task.claimed_by && (
+                                                                    <div className={styles.detailItem}>
+                                                                        <span
+                                                                            className={styles.detailLabel}>Worker</span>
+                                                                        <span className={styles.detailValue}>
                                                                                 <code>{shortenId(task.claimed_by)}</code>
                                                                             </span>
-                                                                        </div>
-                                                                    )}
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Created</span>
-                                                                        <span className={styles.detailValue}>{new Date(task.created_at).toLocaleString()}</span>
-                                                                    </div>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Updated</span>
-                                                                        <span className={styles.detailValue}>{new Date(task.updated_at).toLocaleString()}</span>
-                                                                    </div>
-                                                                    <div className={styles.detailItem}>
-                                                                        <span className={styles.detailLabel}>Max Execution</span>
-                                                                        <span className={styles.detailValue}>{task.max_execution_time}s</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {Object.keys(task.required_labels).length > 0 && (
-                                                                    <div className={styles.labelsSection}>
-                                                                        <span className={styles.detailLabel}>Required Labels</span>
-                                                                        <div className={styles.labelTags}>
-                                                                            {Object.entries(task.required_labels).map(([labelKey, labelValue]) => (
-                                                                                <Tag key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
-                                                                            ))}
-                                                                        </div>
                                                                     </div>
                                                                 )}
-
-                                                                <div className={styles.actionsRow}>
-                                                                    {(task.status === 'queued' ||
-                                                                        task.status === 'created' ||
-                                                                        task.status === 'in_progress' ||
-                                                                        task.status === 'claimed') && (
-                                                                        <Button
-                                                                            danger
-                                                                            onClick={(event) => {
-                                                                                event.stopPropagation();
-                                                                                setCancelConfirm(task.id);
-                                                                            }}
-                                                                        >
-                                                                            Cancel
-                                                                        </Button>
-                                                                    )}
-                                                                    {(task.status === 'failed' || task.status === 'cancelled') && (
-                                                                        <Button
-                                                                            onClick={(event) => {
-                                                                                event.stopPropagation();
-                                                                                setRetryConfirm(task.id);
-                                                                            }}
-                                                                        >
-                                                                            Retry
-                                                                        </Button>
-                                                                    )}
+                                                                <div className={styles.detailItem}>
+                                                                    <span className={styles.detailLabel}>Created</span>
+                                                                    <span
+                                                                        className={styles.detailValue}>{new Date(task.created_at).toLocaleString()}</span>
                                                                 </div>
+                                                                <div className={styles.detailItem}>
+                                                                    <span className={styles.detailLabel}>Updated</span>
+                                                                    <span
+                                                                        className={styles.detailValue}>{new Date(task.updated_at).toLocaleString()}</span>
+                                                                </div>
+                                                                <div className={styles.detailItem}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Max Execution</span>
+                                                                    <span
+                                                                        className={styles.detailValue}>{task.max_execution_time}s</span>
+                                                                </div>
+                                                            </div>
 
-                                                                {task.status === 'awaiting_review' && (
-                                                                    <div className={styles.reviewSection}>
-                                                                        <Heading level={4}>Review Required</Heading>
-                                                                        {reviewLoading && !taskReviewData ? (
-                                                                            <Loader />
-                                                                        ) : taskReviewData ? (
-                                                                            <>
-                                                                                {taskReviewData.messages.length > 0 && (
-                                                                                    <div className={styles.messagesSection}>
-                                                                                        <Heading level={4}>Messages</Heading>
-                                                                                        <div className={styles.messagesList}>
-                                                                                            {taskReviewData.messages.map((message, index) => (
-                                                                                                <div key={index} className={styles.messageItem}>
-                                                                                                    <div className={styles.messageHeader}>
-                                                                                                        <Tag>{message.role}</Tag>
-                                                                                                        <span className={styles.messageTime}>
-                                                                                                            {new Date(message.timestamp).toLocaleTimeString()}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                    <div className={styles.messageContent}>{message.content}</div>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {taskReviewData.diff && (
-                                                                                    <div className={styles.diffSection}>
-                                                                                        <Heading level={4}>Diff</Heading>
-                                                                                        <pre className={styles.diffContent}>{taskReviewData.diff}</pre>
-                                                                                    </div>
-                                                                                )}
-                                                                                <div className={styles.feedbackForm}>
-                                                                                    <Heading level={4}>Provide Feedback</Heading>
-                                                                                    <div className={styles.feedbackButtons}>
-                                                                                        <Button primary onClick={() => void handleFeedback(task.id, 'approve', 'Approved')}>
-                                                                                            Approve
-                                                                                        </Button>
-                                                                                        <Button onClick={() => void handleFeedback(task.id, 'request_changes', 'Changes requested')}>
-                                                                                            Request Changes
-                                                                                        </Button>
-                                                                                        <Button danger onClick={() => void handleFeedback(task.id, 'abort', 'Task aborted')}>
-                                                                                            Abort
-                                                                                        </Button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <Text>No review data available</Text>
-                                                                        )}
+                                                            {Object.keys(task.required_labels).length > 0 && (
+                                                                <div className={styles.labelsSection}>
+                                                                    <span
+                                                                        className={styles.detailLabel}>Required Labels</span>
+                                                                    <div className={styles.labelTags}>
+                                                                        {Object.entries(task.required_labels).map(([labelKey, labelValue]) => (
+                                                                            <Tag
+                                                                                key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
+                                                                        ))}
                                                                     </div>
+                                                                </div>
+                                                            )}
+
+                                                            <div className={styles.actionsRow}>
+                                                                {(task.status === 'queued' ||
+                                                                    task.status === 'created' ||
+                                                                    task.status === 'in_progress' ||
+                                                                    task.status === 'claimed') && (
+                                                                    <Button
+                                                                        danger
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation();
+                                                                            setCancelConfirm(task.id);
+                                                                        }}
+                                                                    >
+                                                                        Cancel
+                                                                    </Button>
+                                                                )}
+                                                                {(task.status === 'failed' || task.status === 'cancelled') && (
+                                                                    <Button
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation();
+                                                                            setRetryConfirm(task.id);
+                                                                        }}
+                                                                    >
+                                                                        Retry
+                                                                    </Button>
                                                                 )}
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </Fragment>
-                                        );
-                                    })}
+
+                                                            {task.status === 'awaiting_review' && (
+                                                                <div className={styles.reviewSection}>
+                                                                    <Heading level={4}>Review Required</Heading>
+                                                                    {reviewLoading && !taskReviewData ? (
+                                                                        <Loader/>
+                                                                    ) : taskReviewData ? (
+                                                                        <>
+                                                                            {taskReviewData.messages.length > 0 && (
+                                                                                <div className={styles.messagesSection}>
+                                                                                    <Heading
+                                                                                        level={4}>Messages</Heading>
+                                                                                    <div
+                                                                                        className={styles.messagesList}>
+                                                                                        {taskReviewData.messages.map((message, index) => (
+                                                                                            <div key={index}
+                                                                                                 className={styles.messageItem}>
+                                                                                                <div
+                                                                                                    className={styles.messageHeader}>
+                                                                                                    <Tag>{message.role}</Tag>
+                                                                                                    <span
+                                                                                                        className={styles.messageTime}>
+                                                                                                            {new Date(message.timestamp).toLocaleTimeString()}
+                                                                                                        </span>
+                                                                                                </div>
+                                                                                                <div
+                                                                                                    className={styles.messageContent}>{message.content}</div>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                            {taskReviewData.diff && (
+                                                                                <div className={styles.diffSection}>
+                                                                                    <Heading level={4}>Diff</Heading>
+                                                                                    <pre
+                                                                                        className={styles.diffContent}>{taskReviewData.diff}</pre>
+                                                                                </div>
+                                                                            )}
+                                                                            <div className={styles.feedbackForm}>
+                                                                                <Heading level={4}>Provide
+                                                                                    Feedback</Heading>
+                                                                                <div className={styles.feedbackButtons}>
+                                                                                    <Button primary
+                                                                                            onClick={() => void handleFeedback(task.id, 'approve', 'Approved')}>
+                                                                                        Approve
+                                                                                    </Button>
+                                                                                    <Button
+                                                                                        onClick={() => void handleFeedback(task.id, 'request_changes', 'Changes requested')}>
+                                                                                        Request Changes
+                                                                                    </Button>
+                                                                                    <Button danger
+                                                                                            onClick={() => void handleFeedback(task.id, 'abort', 'Task aborted')}>
+                                                                                        Abort
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <Text>No review data available</Text>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
                                 </tbody>
                             </table>
                         </div>

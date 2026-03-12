@@ -1,5 +1,5 @@
 @import '@jetbrains/ring-ui-built/components/style.css';
-
+@import "tailwindcss";
 html, body, #root {
     height: 100%;
     margin: 0;

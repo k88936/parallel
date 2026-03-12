@@ -307,14 +307,6 @@ export const ProjectPage = () => {
                         <IslandContent>
                             <div className={styles.infoGrid}>
                                 <div className={styles.infoItem}>
-                                    <Tag>Created</Tag>
-                                    <Text>{new Date(project.created_at).toLocaleString()}</Text>
-                                </div>
-                                <div className={styles.infoItem}>
-                                    <Tag>Updated</Tag>
-                                    <Text>{new Date(project.updated_at).toLocaleString()}</Text>
-                                </div>
-                                <div className={styles.infoItem}>
                                     <Tag>Parent</Tag>
                                     <Text>{(project.parent_id && projects[project.parent_id]?.name) || 'None'}</Text>
                                 </div>

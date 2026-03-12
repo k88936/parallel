@@ -4,32 +4,15 @@
     flex: 1;
 }
 
-.headerRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-}
-
-.headerActions {
-    display: flex;
-    gap: 8px;
-}
-
 .filterBar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
-    gap: 12px;
-    flex-wrap: wrap;
 }
 
 .filterGroup {
     display: flex;
-    align-items: center;
     gap: 12px;
-    flex-wrap: wrap;
 }
 
 .searchGroup {
