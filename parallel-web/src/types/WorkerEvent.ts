@@ -2,4 +2,4 @@
 import type { AgentMessage } from "./AgentMessage";
 import type { ResourceMonitor } from "./ResourceMonitor";
 
-export type WorkerEvent = { "type": "heartbeat", running_tasks: string[], } | { "type": "resource_monitor", resources: ResourceMonitor, } | { "type": "task_started", task_id: string, } | { "type": "task_progress", task_id: string, message: string, } | { "type": "task_awaiting_review", task_id: string, messages: Array<AgentMessage>, diff: string, } | { "type": "task_completed", task_id: string, } | { "type": "task_failed", task_id: string, error: string, } | { "type": "task_cancelled", task_id: string, };
+export type WorkerEvent = { "type": "heartbeat", running_tasks: string[], } | { "type": "resource_monitor", resources: ResourceMonitor, } | { "type": "task_started", task_id: string, } | { "type": "task_progress", task_id: string, message: string, } | { "type": "task_awaiting_review", task_id: string, messages: Array<AgentMessage>, } | { "type": "task_completed", task_id: string, } | { "type": "task_failed", task_id: string, error: string, } | { "type": "task_cancelled", task_id: string, };
