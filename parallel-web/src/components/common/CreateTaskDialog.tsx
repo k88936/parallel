@@ -3,8 +3,12 @@ import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Select from '@jetbrains/ring-ui-built/components/select/select';
 import Input from '@jetbrains/ring-ui-built/components/input/input';
+import Header from '@jetbrains/ring-ui-built/components/island/header';
+import Content from '@jetbrains/ring-ui-built/components/island/content';
+import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
 import type {CreateTaskRequest, RepoConfig, SshKeyConfig, TaskPriority} from '../../types';
 import {df} from './dialogStyles';
+import Theme, {ThemeContext, ThemeProvider} from "@jetbrains/ring-ui-built/components/global/theme";
 
 interface CreateTaskDialogProps {
     show: boolean;
@@ -17,7 +21,7 @@ interface CreateTaskDialogProps {
     error?: string | null;
 }
 
-const PRIORITY_OPTIONS: Array<{key: TaskPriority; label: string}> = [
+const PRIORITY_OPTIONS: Array<{ key: TaskPriority; label: string }> = [
     {key: 'low', label: 'Low'},
     {key: 'normal', label: 'Normal'},
     {key: 'high', label: 'High'},
@@ -33,15 +37,15 @@ const generateDefaultTitle = () => {
 const isTaskPriority = (value: string): value is TaskPriority => PRIORITY_OPTIONS.some((option) => option.key === value);
 
 export const CreateTaskDialog = ({
-    show,
-    projectId,
-    repos,
-    sshKeys,
-    onClose,
-    onSubmit,
-    loading = false,
-    error = null,
-}: CreateTaskDialogProps) => {
+                                     show,
+                                     projectId,
+                                     repos,
+                                     sshKeys,
+                                     onClose,
+                                     onSubmit,
+                                     loading = false,
+                                     error = null,
+                                 }: CreateTaskDialogProps) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [descriptionError, setDescriptionError] = useState<string | null>(null);
@@ -51,9 +55,8 @@ export const CreateTaskDialog = ({
     const [targetBranch, setTargetBranch] = useState('');
     const [priority, setPriority] = useState<TaskPriority>('normal');
     const [maxExecutionTime, setMaxExecutionTime] = useState('3600');
-    const [labelKey, setLabelKey] = useState('');
     const [labelValue, setLabelValue] = useState('');
-    const [labels, setLabels] = useState<Record<string, string>>({});
+    const [labels, setLabels] = useState<Record<string, "">>({});
 
     const resetForm = () => {
         setTitle(generateDefaultTitle());
@@ -65,7 +68,6 @@ export const CreateTaskDialog = ({
         setTargetBranch('');
         setPriority('normal');
         setMaxExecutionTime('3600');
-        setLabelKey('');
         setLabelValue('');
         setLabels({});
     };
@@ -78,9 +80,8 @@ export const CreateTaskDialog = ({
     }, [show]);
 
     const handleAddLabel = () => {
-        if (labelKey.trim() && labelValue.trim()) {
-            setLabels({...labels, [labelKey.trim()]: labelValue.trim()});
-            setLabelKey('');
+        if (labelValue.trim()) {
+            setLabels({...labels, [labelValue.trim()]: ""});
             setLabelValue('');
         }
     };
@@ -126,7 +127,6 @@ export const CreateTaskDialog = ({
     const selectedRepo = repoOptions.find((o) => o.key === repoRef);
     const selectedSshKey = sshKeyOptions.find((o) => o.key === sshKeyRef);
     const selectedPriority = PRIORITY_OPTIONS.find((o) => o.key === priority);
-
     return (
         <Dialog
             show={show}
@@ -134,14 +134,13 @@ export const CreateTaskDialog = ({
             onCloseAttempt={handleClose}
             onOverlayClick={handleClose}
             onEscPress={handleClose}
+            closeButtonInside
             showCloseButton
             trapFocus
-            dense
         >
-            <div>
-                <form className={df.form} onSubmit={handleSubmit}>
-                    <span className={df.title}>Create Task</span>
-
+            <form onSubmit={handleSubmit}>
+                <Header>Create Task</Header>
+                <Content className={df.form}>
                     <div className={df.group}>
                         <label htmlFor="task-title" className={df.label}>
                             Title
@@ -279,18 +278,12 @@ export const CreateTaskDialog = ({
                         <div className={df.control}>
                             <div className="flex gap-2 mb-2">
                                 <Input
-                                    value={labelKey}
-                                    onChange={(e) => setLabelKey(e.target.value)}
-                                    placeholder="Key"
-                                    disabled={loading}
-                                />
-                                <Input
                                     value={labelValue}
                                     onChange={(e) => setLabelValue(e.target.value)}
                                     placeholder="Value"
                                     disabled={loading}
                                 />
-                                <Button onClick={handleAddLabel} disabled={loading || !labelKey.trim() || !labelValue.trim()}>
+                                <Button type="button" onClick={handleAddLabel} disabled={loading || !labelValue.trim()}>
                                     Add
                                 </Button>
                             </div>
@@ -299,7 +292,8 @@ export const CreateTaskDialog = ({
                                     <span className="px-2 py-0.5 bg-[#333] rounded text-sm">
                                         {key}: {value}
                                     </span>
-                                    <Button danger inline onClick={() => handleRemoveLabel(key)} disabled={loading}>
+                                    <Button danger inline type="button" onClick={() => handleRemoveLabel(key)}
+                                            disabled={loading}>
                                         Remove
                                     </Button>
                                 </div>
@@ -309,23 +303,22 @@ export const CreateTaskDialog = ({
 
                     {error && (
                         <div className={df.group}>
-                            <div className={df.label} />
+                            <div className={df.label}/>
                             <div className={df.control}>
                                 <div className={df.errorBubble}>{error}</div>
                             </div>
                         </div>
                     )}
-
-                    <div className={df.footer}>
-                        <Button primary type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Task'}
-                        </Button>
-                        <Button onClick={handleClose} disabled={loading}>
-                            Cancel
-                        </Button>
-                    </div>
-                </form>
-            </div>
+                </Content>
+                <Panel className="flex justify-end gap-2">
+                    <Button primary type="submit" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create Task'}
+                    </Button>
+                    <Button type="button" onClick={handleClose} disabled={loading}>
+                        Cancel
+                    </Button>
+                </Panel>
+            </form>
         </Dialog>
     );
 };

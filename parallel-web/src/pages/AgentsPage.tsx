@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {workersApi} from '../api';
 import type {ResourceMonitor, WorkerInfo, WorkerStatus, WorkerSummary} from '../types';
+import {Sidebar} from '../components/Layout';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
 import Text from '@jetbrains/ring-ui-built/components/text/text';
@@ -8,8 +9,8 @@ import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
 import Island from '@jetbrains/ring-ui-built/components/island/island';
 import IslandHeader from '@jetbrains/ring-ui-built/components/island/header';
 import IslandContent from '@jetbrains/ring-ui-built/components/island/content';
-import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
+import Group from "@jetbrains/ring-ui-built/components/group/group";
 
 const STATUS_DOT_COLOR: Record<WorkerStatus, string> = {
     idle: 'bg-[#4caf50]',
@@ -137,58 +138,45 @@ export const AgentsPage = () => {
         };
     }, [loadSelectedWorkerDetails, loadWorkers, selectedWorkerId]);
 
-    const handleRefresh = async () => {
-        await loadWorkers();
-        if (selectedWorkerId) {
-            await loadSelectedWorkerDetails(selectedWorkerId);
-        }
-    };
-
     return (
-        <div className="flex w-full gap-4 overflow-hidden">
-            <aside className="w-70 min-w-70 flex flex-col bg-(--ring-sidebar-background-color,#1e1e1e) border border-(--ring-border-color,#3d3d3d) rounded overflow-hidden">
-                <div className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] flex items-center justify-between">
-                    <Heading level={3}>Agents</Heading>
-                    <Button onClick={() => void handleRefresh()} disabled={loading}>
-                        Refresh
-                    </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                    {error && workers.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                            <Text>{error}</Text>
-                        </div>
-                    ) : loading && workers.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                            <Loader />
-                        </div>
-                    ) : workers.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                            <Text>No agents connected</Text>
-                        </div>
-                    ) : (
-                        <div className="p-0">
-                            {workers.map((worker) => (
-                                <div
-                                    key={worker.id}
-                                    className={`px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] cursor-pointer flex items-center gap-3 transition-colors hover:bg-[var(--ring-hover-background-color,#2d2d2d)] ${selectedWorkerId === worker.id ? 'bg-[var(--ring-selected-background-color,#3d3d3d)]' : ''}`}
-                                    onClick={() => setSelectedWorkerId(worker.id)}
-                                >
-                                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT_COLOR[worker.status]}`} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{worker.name}</div>
-                                        <div className="flex gap-2 text-xs text-[var(--ring-secondary-text-color,#888)] mt-0.5">
-                                            <span>{worker.status}</span>
-                                            <span>Tasks: {worker.current_task_count}</span>
-                                            <span>{formatTimeAgo(worker.last_heartbeat)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </aside>
+        <Group className="flex w-full gap-4">
+            <Sidebar
+                title="Agents"
+            >
+                {error && workers.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
+                        <Text>{error}</Text>
+                    </div>
+                ) : loading && workers.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
+                        <Loader />
+                    </div>
+                ) : workers.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
+                        <Text>No agents connected</Text>
+                    </div>
+                ) : (
+                    <div className="p-0">
+                        {workers.map((worker) => (
+                            <Group
+                                key={worker.id}
+                                className={`px-4 py-3 rounded-2xl cursor-pointer flex items-center gap-3 hover:bg-(--ring-hover-background-color) ${selectedWorkerId === worker.id ? 'bg-(--ring-selected-background-color)' : ''}`}
+                                onClick={() => setSelectedWorkerId(worker.id)}
+                            >
+                                <Group className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT_COLOR[worker.status]}`} />
+                                <Group className="flex-1 min-w-0">
+                                    <Group className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{worker.name}</Group>
+                                    <Group className="flex gap-2 text-xs text-(--ring-secondary-text-color) mt-0.5">
+                                        <Group>{worker.status}</Group>
+                                        <Group>Tasks: {worker.current_task_count}</Group>
+                                        <Group>{formatTimeAgo(worker.last_heartbeat)}</Group>
+                                    </Group>
+                                </Group>
+                            </Group>
+                        ))}
+                    </div>
+                )}
+            </Sidebar>
 
             <main className="flex-1 flex flex-col overflow-hidden m-4 ml-0">
                 {!selectedWorkerId ? (
@@ -346,6 +334,6 @@ export const AgentsPage = () => {
                     </div>
                 ) : null}
             </main>
-        </div>
+        </Group>
     );
 };

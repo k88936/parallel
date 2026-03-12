@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@jetbrains/icons": "^5.19.0",
-    "@jetbrains/ring-ui-built": "^7.0.97",
+    "@jetbrains/ring-ui-built": "^7.0.98",
     "@tailwindcss/vite": "^4.2.1",
     "axios": "^1.13.6",
     "react": "^19.2.0",

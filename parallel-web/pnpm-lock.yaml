@@ -12,8 +12,8 @@ importers:
         specifier: ^5.19.0
         version: 5.19.0
       '@jetbrains/ring-ui-built':
-        specifier: ^7.0.97
-        version: 7.0.97(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(core-js@3.48.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^7.0.98
+        version: 7.0.98(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(core-js@3.48.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tailwindcss/vite':
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.31.1))
@@ -378,8 +378,8 @@ packages:
   '@jetbrains/icons@5.19.0':
     resolution: {integrity: sha512-qJHzWfK+J9nqHM34FEtmx/OsVAlR3dNz3JYpx8yI6jrIRAnXCefaS62x3p5h6oEXKR5bMtw2j0+byzJ7u5X5sA==}
 
-  '@jetbrains/ring-ui-built@7.0.97':
-    resolution: {integrity: sha512-rd/Fob0wXmmpm+E+76e1HouJrBmDQdcf3MIaAKpDxA8TT4fvj+j6ks61EpC0BbmkcjsTlLfWF+N3gc+lt1VAjQ==}
+  '@jetbrains/ring-ui-built@7.0.98':
+    resolution: {integrity: sha512-xcrSzTkiViTZwND6kjeDU32Kd0h4kFZfAPQgd0qJFW6P8+KGuDTwXHi5mNdJTirSmbjTo7dVO45/VnTlZjqWkw==}
     engines: {node: '>=14.0', npm: '>=6.0.0'}
     peerDependencies:
       '@types/react': '>=18.0.0'
@@ -1906,7 +1906,7 @@ snapshots:
 
   '@jetbrains/icons@5.19.0': {}
 
-  '@jetbrains/ring-ui-built@7.0.97(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(core-js@3.48.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@jetbrains/ring-ui-built@7.0.98(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(core-js@3.48.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@jetbrains/icons': 5.19.0
       change-case: 4.1.2

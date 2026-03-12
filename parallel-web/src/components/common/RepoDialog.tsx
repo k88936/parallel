@@ -1,6 +1,9 @@
 import {useState, useEffect} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
+import Header from '@jetbrains/ring-ui-built/components/island/header';
+import Content from '@jetbrains/ring-ui-built/components/island/content';
+import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
 import type {RepoConfig} from '../../types';
 import {df} from './dialogStyles';
 
@@ -75,10 +78,9 @@ export const RepoDialog = ({show, onClose, onSubmit, initialData}: RepoDialogPro
             trapFocus
             dense
         >
-            <div>
-                <form className={df.form} onSubmit={handleSubmit}>
-                    <span className={df.title}>{isEdit ? 'Edit Repository' : 'Add Repository'}</span>
-
+            <form onSubmit={handleSubmit}>
+                <Header>{isEdit ? 'Edit Repository' : 'Add Repository'}</Header>
+                <Content className={df.form}>
                     <div className={df.group}>
                         <label htmlFor="repo-name" className={df.label}>
                             Name
@@ -114,17 +116,16 @@ export const RepoDialog = ({show, onClose, onSubmit, initialData}: RepoDialogPro
                             {error && <div className={df.errorBubble}>{error}</div>}
                         </div>
                     </div>
-
-                    <div className={df.footer}>
-                        <Button primary type="submit" disabled={loading}>
-                            {loading ? 'Saving...' : (isEdit ? 'Save' : 'Add')}
-                        </Button>
-                        <Button onClick={handleClose} disabled={loading}>
-                            Cancel
-                        </Button>
-                    </div>
-                </form>
-            </div>
+                </Content>
+                <Panel className="flex justify-end gap-2">
+                    <Button primary type="submit" disabled={loading}>
+                        {loading ? 'Saving...' : (isEdit ? 'Save' : 'Add')}
+                    </Button>
+                    <Button type="button" onClick={handleClose} disabled={loading}>
+                        Cancel
+                    </Button>
+                </Panel>
+            </form>
         </Dialog>
     );
 };

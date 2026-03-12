@@ -1,4 +1,4 @@
-import {Fragment, useEffect, useMemo, useRef, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useQueueSearchParams} from '../hooks/useQueueSearchParams';
 import {useTasksStore} from '../stores/useTasksStore';
 import type {FeedbackType, ListTasksQuery, TaskPriority, TaskStatus} from '../types';
@@ -16,8 +16,18 @@ import Input from '@jetbrains/ring-ui-built/components/input/input';
 import Confirm from '@jetbrains/ring-ui-built/components/confirm/confirm';
 import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
 import Group from '@jetbrains/ring-ui-built/components/group/group';
+import Pager from '@jetbrains/ring-ui-built/components/pager/pager';
+import Selection from '@jetbrains/ring-ui-built/components/table/selection';
+import TableContainer from '@jetbrains/ring-ui-built/components/table/table';
+import type {Column, SortParams} from '@jetbrains/ring-ui-built/components/table/header-cell';
 
 const PAGE_SIZE = 20;
+const PRIORITY_ORDER: Record<TaskPriority, number> = {
+    low: 0,
+    normal: 1,
+    high: 2,
+    urgent: 3,
+};
 
 const STATUS_OPTIONS = [
     {key: '', label: 'All Statuses'},
@@ -85,7 +95,6 @@ export const QueuePage = () => {
     const {filters, page, selectedTaskId, setFilters, setPage, setSelectedTaskId} = useQueueSearchParams();
     const tasks = useTasksStore((state) => state.tasks);
     const total = useTasksStore((state) => state.total);
-    const hasMore = useTasksStore((state) => state.hasMore);
     const reviewData = useTasksStore((state) => state.reviewData);
     const reviewLoadingIds = useTasksStore((state) => state.reviewLoadingIds);
     const loading = useTasksStore((state) => state.loading);
@@ -99,6 +108,8 @@ export const QueuePage = () => {
 
     const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
     const [retryConfirm, setRetryConfirm] = useState<string | null>(null);
+    const [sortKey, setSortKey] = useState('created_at');
+    const [sortOrder, setSortOrder] = useState(false);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentSearch = filters.search || '';
     const searchInputRef = useRef(currentSearch);
@@ -203,9 +214,116 @@ export const QueuePage = () => {
     };
 
     const currentPage = page;
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const selectedStatusOption = STATUS_OPTIONS.find((option) => option.key === (filters.status || ''));
     const selectedPriorityOption = PRIORITY_OPTIONS.find((option) => option.key === (filters.priority || ''));
+    type QueueTask = (typeof tasks)[number];
+
+    const sortedTasks = useMemo(() => {
+        const nextTasks = [...tasks];
+        const direction = sortOrder ? 1 : -1;
+
+        nextTasks.sort((left, right) => {
+            let comparison = 0;
+
+            switch (sortKey) {
+                case 'id':
+                    comparison = left.id.localeCompare(right.id);
+                    break;
+                case 'title':
+                    comparison = left.title.localeCompare(right.title);
+                    break;
+                case 'status':
+                    comparison = left.status.localeCompare(right.status);
+                    break;
+                case 'priority':
+                    comparison = PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority];
+                    break;
+                case 'created_at':
+                    comparison = new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+                    break;
+                default:
+                    comparison = 0;
+                    break;
+            }
+
+            if (comparison === 0) {
+                comparison = left.id.localeCompare(right.id);
+            }
+
+            return comparison * direction;
+        });
+
+        return nextTasks;
+    }, [sortKey, sortOrder, tasks]);
+
+    const selectedTask = selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) ?? null : null;
+    const selectedTaskReviewData = selectedTask ? reviewData[selectedTask.id] : null;
+    const selectedTaskReviewLoading = selectedTask ? reviewLoadingIds[selectedTask.id] ?? false : false;
+
+    const handleSort = ({column, order}: SortParams) => {
+        setSortKey(column.id);
+        setSortOrder(order);
+    };
+
+    const columns = useMemo<Column<QueueTask>[]>(() => [
+        {
+            id: 'id',
+            sortable: true,
+            title: 'ID',
+            className: 'align-top whitespace-nowrap',
+            getValue: (task) => (
+                <code className="font-mono text-xs text-[var(--ring-text-color,#fff)]">
+                    {shortenId(task.id)}
+                </code>
+            ),
+        },
+        {
+            id: 'title',
+            sortable: true,
+            title: 'Title',
+            className: 'align-top',
+            getValue: (task) => (
+                <div className="max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap">
+                    {task.title}
+                </div>
+            ),
+        },
+        {
+            id: 'status',
+            sortable: true,
+            title: 'Status',
+            className: 'align-top whitespace-nowrap',
+            getValue: (task) => (
+                <Tag className={getStatusColor(task.status)}>
+                    {task.status.replace('_', ' ')}
+                </Tag>
+            ),
+        },
+        {
+            id: 'priority',
+            sortable: true,
+            title: 'Priority',
+            className: 'align-top whitespace-nowrap',
+            getValue: (task) => (
+                <Tag className={getPriorityColor(task.priority)}>
+                    {task.priority}
+                </Tag>
+            ),
+        },
+        {
+            id: 'created_at',
+            sortable: true,
+            title: 'Age',
+            className: 'align-top whitespace-nowrap text-[var(--ring-secondary-text-color,#888)]',
+            getValue: (task) => formatTimeAgo(task.created_at),
+        },
+    ], []);
+
+    const tableSelection = useMemo(() => new Selection<QueueTask>({
+        data: sortedTasks,
+        focused: selectedTask,
+        getKey: (task) => task.id,
+    }), [selectedTask, sortedTasks]);
 
     return (
         <Group className="p-4 overflow-auto flex-1">
@@ -214,7 +332,7 @@ export const QueuePage = () => {
                     <Heading level={1}>Task Queue</Heading>
                 </IslandHeader>
                 <IslandContent>
-                    <Group className="flex justify-between">
+                    <Group className="flex justify-between m-2">
                         <Group className="flex">
                             <Select
                                 data={STATUS_OPTIONS}
@@ -253,220 +371,192 @@ export const QueuePage = () => {
                     </Group>
 
                     {error && tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-[200px] text-[var(--ring-secondary-text-color,#888)]">
+                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
                             <Text>{error}</Text>
                         </div>
                     ) : loading && tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-[200px] text-[var(--ring-secondary-text-color,#888)]">
+                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
                             <Loader />
                         </div>
                     ) : tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-[200px] text-[var(--ring-secondary-text-color,#888)]">
+                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
                             <Text>No tasks found</Text>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto mb-4">
-                            <table className="w-full border-collapse text-sm">
-                                <thead>
-                                    <tr>
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm w-[40px] text-center" />
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm w-[100px]">ID</th>
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm min-w-[200px]">Title</th>
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm w-[140px]">Status</th>
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm w-[100px]">Priority</th>
-                                        <th className="text-left px-4 py-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] border-b-2 border-[var(--ring-border-color,#3d3d3d)] font-medium text-[var(--ring-secondary-text-color,#888)] text-sm w-[80px]">Age</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {tasks.map((task) => {
-                                        const isExpanded = selectedTaskId === task.id;
-                                        const taskReviewData = reviewData[task.id];
-                                        const reviewLoading = reviewLoadingIds[task.id] ?? false;
+                        <>
+                            <TableContainer<QueueTask>
+                                className="mb-4"
+                                columns={columns}
+                                data={sortedTasks}
+                                getItemClassName={(task) => [
+                                    'cursor-pointer transition-colors',
+                                    task.id === selectedTaskId
+                                        ? 'bg-[var(--ring-selected-background-color,#2a2a2a)]'
+                                        : 'hover:bg-[var(--ring-hover-background-color,#2d2d2d)]',
+                                ].join(' ')}
+                                getItemKey={(task) => task.id}
+                                onItemClick={(task) => handleExpand(task.id)}
+                                onSort={handleSort}
+                                renderEmpty={() => <Text>No tasks found</Text>}
+                                selectable={false}
+                                selection={tableSelection}
+                                sortKey={sortKey}
+                                sortOrder={sortOrder}
+                                stickyHeader={false}
+                            />
 
-                                        return (
-                                            <Fragment key={task.id}>
-                                                <tr
-                                                    className={`cursor-pointer transition-colors hover:bg-[var(--ring-hover-background-color,#2d2d2d)] ${isExpanded ? 'bg-[var(--ring-selected-background-color,#2a2a2a)]' : ''}`}
-                                                    onClick={() => handleExpand(task.id)}
-                                                >
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top w-[40px] text-center">
-                                                        <span className="text-[10px] text-[var(--ring-secondary-text-color,#888)]">{isExpanded ? '▼' : '▶'}</span>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top w-[100px]">
-                                                        <code className="font-mono text-xs text-[var(--ring-text-color,#fff)]">{shortenId(task.id)}</code>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top min-w-[200px]">
-                                                        <div className="max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap">{task.title}</div>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top w-[140px]">
-                                                        <Tag className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</Tag>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top w-[100px]">
-                                                        <Tag className={getPriorityColor(task.priority)}>{task.priority}</Tag>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-b border-[var(--ring-border-color,#3d3d3d)] align-top w-[80px] text-[var(--ring-secondary-text-color,#888)]">{formatTimeAgo(task.created_at)}</td>
-                                                </tr>
-                                                {isExpanded && (
-                                                    <tr className="bg-[var(--ring-selected-background-color,#252525)]">
-                                                        <td className="p-0" colSpan={6}>
-                                                            <div className="p-4 pb-6 border-b border-[var(--ring-border-color,#3d3d3d)]">
-                                                                <div className="grid grid-cols-3 gap-4 mb-4">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Description</span>
-                                                                        <span className="text-sm">{task.description || 'No description'}</span>
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Repository</span>
-                                                                        <span className="text-sm">
-                                                                            <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{task.repo_url}</code>
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Base Branch</span>
-                                                                        <span className="text-sm">
-                                                                            <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{task.base_branch}</code>
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Target Branch</span>
-                                                                        <span className="text-sm">
-                                                                            <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{task.target_branch}</code>
-                                                                        </span>
-                                                                    </div>
-                                                                    {task.claimed_by && (
-                                                                        <div className="flex flex-col gap-1">
-                                                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Worker</span>
-                                                                            <span className="text-sm">
-                                                                                <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{shortenId(task.claimed_by)}</code>
+                            {selectedTask && (
+                                <div className="mb-4 rounded border border-[var(--ring-border-color,#3d3d3d)] bg-[var(--ring-selected-background-color,#252525)] p-4 pb-6">
+                                    <div className="mb-4 flex items-center justify-between gap-4">
+                                        <div>
+                                            <Heading level={3}>{selectedTask.title}</Heading>
+                                            <Text className="text-[var(--ring-secondary-text-color,#888)]">
+                                                Task {shortenId(selectedTask.id)}
+                                            </Text>
+                                        </div>
+                                        <Button onClick={() => setSelectedTaskId(null)}>Close Details</Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4 mb-4">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Description</span>
+                                            <span className="text-sm">{selectedTask.description || 'No description'}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Repository</span>
+                                            <span className="text-sm">
+                                                <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.repo_url}</code>
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Base Branch</span>
+                                            <span className="text-sm">
+                                                <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.base_branch}</code>
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Target Branch</span>
+                                            <span className="text-sm">
+                                                <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.target_branch}</code>
+                                            </span>
+                                        </div>
+                                        {selectedTask.claimed_by && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Worker</span>
+                                                <span className="text-sm">
+                                                    <code className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{shortenId(selectedTask.claimed_by)}</code>
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Created</span>
+                                            <span className="text-sm">{new Date(selectedTask.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Updated</span>
+                                            <span className="text-sm">{new Date(selectedTask.updated_at).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max Execution</span>
+                                            <span className="text-sm">{selectedTask.max_execution_time}s</span>
+                                        </div>
+                                    </div>
+
+                                    {Object.keys(selectedTask.required_labels).length > 0 && (
+                                        <div className="mb-4">
+                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Required Labels</span>
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {Object.entries(selectedTask.required_labels).map(([labelKey, labelValue]) => (
+                                                    <Tag key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-2 mb-4">
+                                        {(selectedTask.status === 'queued' ||
+                                            selectedTask.status === 'created' ||
+                                            selectedTask.status === 'in_progress' ||
+                                            selectedTask.status === 'claimed') && (
+                                            <Button danger onClick={() => setCancelConfirm(selectedTask.id)}>
+                                                Cancel
+                                            </Button>
+                                        )}
+                                        {(selectedTask.status === 'failed' || selectedTask.status === 'cancelled') && (
+                                            <Button onClick={() => setRetryConfirm(selectedTask.id)}>
+                                                Retry
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {selectedTask.status === 'awaiting_review' && (
+                                        <div className="mt-4 pt-4 border-t border-[var(--ring-border-color,#3d3d3d)]">
+                                            <Heading level={4}>Review Required</Heading>
+                                            {selectedTaskReviewLoading && !selectedTaskReviewData ? (
+                                                <Loader />
+                                            ) : selectedTaskReviewData ? (
+                                                <>
+                                                    {selectedTaskReviewData.messages.length > 0 && (
+                                                        <div className="mb-4">
+                                                            <Heading level={4}>Messages</Heading>
+                                                            <div className="max-h-[300px] overflow-y-auto mt-2">
+                                                                {selectedTaskReviewData.messages.map((message, index) => (
+                                                                    <div key={index} className="p-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] rounded mb-2 last:mb-0">
+                                                                        <div className="flex items-center gap-2 mb-2">
+                                                                            <Tag>{message.role}</Tag>
+                                                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">
+                                                                                {new Date(message.timestamp).toLocaleTimeString()}
                                                                             </span>
                                                                         </div>
-                                                                    )}
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Created</span>
-                                                                        <span className="text-sm">{new Date(task.created_at).toLocaleString()}</span>
+                                                                        <div className="text-sm whitespace-pre-wrap break-words">{message.content}</div>
                                                                     </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Updated</span>
-                                                                        <span className="text-sm">{new Date(task.updated_at).toLocaleString()}</span>
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max Execution</span>
-                                                                        <span className="text-sm">{task.max_execution_time}s</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {Object.keys(task.required_labels).length > 0 && (
-                                                                    <div className="mb-4">
-                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Required Labels</span>
-                                                                        <div className="flex flex-wrap gap-1.5 mt-2">
-                                                                            {Object.entries(task.required_labels).map(([labelKey, labelValue]) => (
-                                                                                <Tag key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                <div className="flex gap-2 mb-4">
-                                                                    {(task.status === 'queued' ||
-                                                                        task.status === 'created' ||
-                                                                        task.status === 'in_progress' ||
-                                                                        task.status === 'claimed') && (
-                                                                        <Button
-                                                                            danger
-                                                                            onClick={(event) => {
-                                                                                event.stopPropagation();
-                                                                                setCancelConfirm(task.id);
-                                                                            }}
-                                                                        >
-                                                                            Cancel
-                                                                        </Button>
-                                                                    )}
-                                                                    {(task.status === 'failed' || task.status === 'cancelled') && (
-                                                                        <Button
-                                                                            onClick={(event) => {
-                                                                                event.stopPropagation();
-                                                                                setRetryConfirm(task.id);
-                                                                            }}
-                                                                        >
-                                                                            Retry
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-
-                                                                {task.status === 'awaiting_review' && (
-                                                                    <div className="mt-4 pt-4 border-t border-[var(--ring-border-color,#3d3d3d)]">
-                                                                        <Heading level={4}>Review Required</Heading>
-                                                                        {reviewLoading && !taskReviewData ? (
-                                                                            <Loader />
-                                                                        ) : taskReviewData ? (
-                                                                            <>
-                                                                                {taskReviewData.messages.length > 0 && (
-                                                                                    <div className="mb-4">
-                                                                                        <Heading level={4}>Messages</Heading>
-                                                                                        <div className="max-h-[300px] overflow-y-auto mt-2">
-                                                                                            {taskReviewData.messages.map((message, index) => (
-                                                                                                <div key={index} className="p-3 bg-[var(--ring-sidebar-background-color,#1e1e1e)] rounded mb-2 last:mb-0">
-                                                                                                    <div className="flex items-center gap-2 mb-2">
-                                                                                                        <Tag>{message.role}</Tag>
-                                                                                                        <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">
-                                                                                                            {new Date(message.timestamp).toLocaleTimeString()}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                    <div className="text-sm whitespace-pre-wrap break-words">{message.content}</div>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {taskReviewData.diff && (
-                                                                                    <div className="mb-4">
-                                                                                        <Heading level={4}>Diff</Heading>
-                                                                                        <pre className="max-h-[300px] overflow-auto bg-[var(--ring-sidebar-background-color,#1e1e1e)] p-3 rounded font-mono text-xs mt-2 whitespace-pre-wrap break-words">{taskReviewData.diff}</pre>
-                                                                                    </div>
-                                                                                )}
-                                                                                <div className="mt-4 pt-4 border-t border-[var(--ring-border-color,#3d3d3d)]">
-                                                                                    <Heading level={4}>Provide Feedback</Heading>
-                                                                                    <div className="flex gap-2 mt-2">
-                                                                                        <Button primary onClick={() => void handleFeedback(task.id, 'approve', 'Approved')}>
-                                                                                            Approve
-                                                                                        </Button>
-                                                                                        <Button onClick={() => void handleFeedback(task.id, 'request_changes', 'Changes requested')}>
-                                                                                            Request Changes
-                                                                                        </Button>
-                                                                                        <Button danger onClick={() => void handleFeedback(task.id, 'abort', 'Task aborted')}>
-                                                                                            Abort
-                                                                                        </Button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <Text>No review data available</Text>
-                                                                        )}
-                                                                    </div>
-                                                                )}
+                                                                ))}
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                                        </div>
+                                                    )}
+                                                    {selectedTaskReviewData.diff && (
+                                                        <div className="mb-4">
+                                                            <Heading level={4}>Diff</Heading>
+                                                            <pre className="max-h-[300px] overflow-auto bg-[var(--ring-sidebar-background-color,#1e1e1e)] p-3 rounded font-mono text-xs mt-2 whitespace-pre-wrap break-words">{selectedTaskReviewData.diff}</pre>
+                                                        </div>
+                                                    )}
+                                                    <div className="mt-4 pt-4 border-t border-[var(--ring-border-color,#3d3d3d)]">
+                                                        <Heading level={4}>Provide Feedback</Heading>
+                                                        <div className="flex gap-2 mt-2">
+                                                            <Button primary onClick={() => void handleFeedback(selectedTask.id, 'approve', 'Approved')}>
+                                                                Approve
+                                                            </Button>
+                                                            <Button onClick={() => void handleFeedback(selectedTask.id, 'request_changes', 'Changes requested')}>
+                                                                Request Changes
+                                                            </Button>
+                                                            <Button danger onClick={() => void handleFeedback(selectedTask.id, 'abort', 'Task aborted')}>
+                                                                Abort
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <Text>No review data available</Text>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {total > 0 && (
-                        <div className="flex items-center justify-center gap-4 pt-4">
-                            <Button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
-                                Previous
-                            </Button>
-                            <Text>
-                                Page {currentPage} of {totalPages} ({total} total)
+                        <div className="pt-4">
+                            <Pager
+                                currentPage={currentPage}
+                                disablePageSizeSelector
+                                onPageChange={(nextPage) => setPage(nextPage)}
+                                pageSize={PAGE_SIZE}
+                                total={total}
+                            />
+                            <Text className="mt-2 text-[var(--ring-secondary-text-color,#888)]">
+                                Showing {tasks.length} tasks on page {currentPage}
                             </Text>
-                            <Button disabled={!hasMore} onClick={() => setPage(currentPage + 1)}>
-                                Next
-                            </Button>
                         </div>
                     )}
                 </IslandContent>

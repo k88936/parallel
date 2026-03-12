@@ -1,6 +1,9 @@
 import {useState, useEffect} from 'react';
 import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
+import Header from '@jetbrains/ring-ui-built/components/island/header';
+import Content from '@jetbrains/ring-ui-built/components/island/content';
+import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
 import type {CreateProjectRequest} from '../../types';
 import {df} from './dialogStyles';
 
@@ -64,10 +67,9 @@ export const SubprojectDialog = ({show, parentId, onClose, onSubmit}: Subproject
             trapFocus
             dense
         >
-            <div>
-                <form className={df.form} onSubmit={handleSubmit}>
-                    <span className={df.title}>Add Subproject</span>
-
+            <form onSubmit={handleSubmit}>
+                <Header>Add Subproject</Header>
+                <Content className={df.form}>
                     <div className={df.group}>
                         <label htmlFor="subproject-name" className={df.label}>
                             Name
@@ -86,17 +88,16 @@ export const SubprojectDialog = ({show, parentId, onClose, onSubmit}: Subproject
                             {error && <div className={df.errorBubble}>{error}</div>}
                         </div>
                     </div>
-
-                    <div className={df.footer}>
-                        <Button primary type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create'}
-                        </Button>
-                        <Button onClick={handleClose} disabled={loading}>
-                            Cancel
-                        </Button>
-                    </div>
-                </form>
-            </div>
+                </Content>
+                <Panel className="flex justify-end gap-2">
+                    <Button primary type="submit" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create'}
+                    </Button>
+                    <Button type="button" onClick={handleClose} disabled={loading}>
+                        Cancel
+                    </Button>
+                </Panel>
+            </form>
         </Dialog>
     );
 };

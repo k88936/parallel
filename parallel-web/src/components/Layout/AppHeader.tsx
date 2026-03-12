@@ -24,12 +24,9 @@ export const AppHeader = () => {
 
     return (
         <Header
-            className="sticky top-0"
-            spaced={true}
-            vertical
-        >
+            vertical>
             <Link href="/" className="flex items-center no-underline">
-                <Logo glyph={PARALLEL_LOGO} />
+                <Logo glyph={PARALLEL_LOGO}/>
             </Link>
             <Links>
                 <HeaderIcon

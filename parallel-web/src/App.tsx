@@ -9,7 +9,7 @@ export const App = () => {
         <ThemeProvider theme={Theme.DARK}>
             <AlertProvider>
                 <BrowserRouter>
-                    <div className="flex flex-row min-h-screen bg-[var(--ring-content-background-color,#1e1e1e)] text-[var(--ring-text-color,#fff)]">
+                    <div className="flex flex-row min-h-screen bg-(--ring-secondary-background-color) text-(--ring-text-color)">
                         <AppHeader />
                         <Routes>
                             <Route path="/" element={<Navigate to="/projects/root" replace />} />

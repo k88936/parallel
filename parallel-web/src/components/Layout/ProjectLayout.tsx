@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Outlet, useParams} from 'react-router-dom';
 import {projectsApi} from '../../api';
 import type {Project} from '../../types';
-import {Sidebar} from './Sidebar';
+import {ProjectSidebar} from './ProjectSidebar.tsx';
 import type {ProjectLayoutContextValue} from './ProjectLayoutContext';
 
 const getErrorMessage = (error: unknown): string => {
@@ -196,7 +196,7 @@ export const ProjectLayout = () => {
 
     return (
         <div className="flex flex-1 overflow-hidden">
-            <Sidebar
+            <ProjectSidebar
                 projects={projects}
                 childrenByParent={childrenByParent}
                 selectedProjectId={projectId ?? null}

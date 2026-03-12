@@ -22,6 +22,7 @@ import {SubprojectDialog} from '../components/common/SubprojectDialog';
 import {SshKeyDialog} from '../components/common/SshKeyDialog';
 import {RepoDialog} from '../components/common/RepoDialog';
 import {CreateTaskDialog} from '../components/common/CreateTaskDialog';
+import Group from "@jetbrains/ring-ui-built/components/group/group";
 
 type TabId = 'overview' | 'settings' | 'repos' | 'tasks';
 
@@ -34,7 +35,7 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 export const ProjectPage = () => {
-    const {projectId} = useParams<{projectId: string}>();
+    const {projectId} = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const {
         projects,
@@ -114,10 +115,10 @@ export const ProjectPage = () => {
 
     const breadcrumb = useMemo(() => {
         if (!project) {
-            return [] as Array<{name: string; id: string | null}>;
+            return [] as Array<{ name: string; id: string | null }>;
         }
 
-        const parts: Array<{name: string; id: string | null}> = [];
+        const parts: Array<{ name: string; id: string | null }> = [];
         let current: Project | null = project;
         while (current) {
             parts.unshift({name: current.name, id: current.id});
@@ -126,7 +127,7 @@ export const ProjectPage = () => {
         return parts;
     }, [project, projects]);
 
-    const runProjectMutation = async <T,>(action: () => Promise<T>): Promise<T> => {
+    const runProjectMutation = async <T, >(action: () => Promise<T>): Promise<T> => {
         try {
             setPageError(null);
             return await action();
@@ -140,7 +141,7 @@ export const ProjectPage = () => {
     if (!actualProjectId || pageLoading || (loading && !project)) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center gap-4">
-                <Loader message="Loading project..." />
+                <Loader message="Loading project..."/>
             </div>
         );
     }
@@ -269,33 +270,30 @@ export const ProjectPage = () => {
     };
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden p-0">
+        <Group className="flex-1 flex flex-col overflow-hidden p-0">
             {pageError && (
-                <div className="px-5 py-3 border-b border-[var(--ring-border-color,#3d3d3d)]">
-                    <Text>{pageError}</Text>
-                </div>
+                <Text>{pageError}</Text>
             )}
-            <div className="px-5 py-3 border-b border-[var(--ring-border-color,#3d3d3d)]">
+            <Group className="px-5 py-3 ">
                 <Breadcrumbs>
                     {breadcrumb.map((part, index) => (
-                        <span key={part.id || index}>
-                            <span
-                                className="cursor-pointer text-[var(--ring-link-color,#4a90d9)] hover:underline"
-                                onClick={() => part.id && index < breadcrumb.length - 1 && navigate(`/projects/${part.id}`)}
-                            >
-                                {part.name}
-                            </span>
-                        </span>
+                        <Button
+                            key={part.id || index}
+                            inline
+                            onClick={() => part.id && index < breadcrumb.length - 1 && navigate(`/projects/${part.id}`)}
+                        >
+                            {part.name}
+                        </Button>
                     ))}
                 </Breadcrumbs>
-            </div>
+            </Group>
 
-            <div className="flex justify-between items-center p-5 gap-4">
+            <Group className="flex justify-between items-center p-5 gap-4">
                 <Heading level={1}>{project.name}</Heading>
                 <Button primary onClick={() => setShowCreateTaskDialog(true)}>
                     Draft New Task
                 </Button>
-            </div>
+            </Group>
 
             <Tabs onSelect={(key) => setActiveTab(key as TabId)} selected={activeTab} className="flex-1 px-5">
                 <Tab id="overview" title="Overview">
@@ -304,16 +302,16 @@ export const ProjectPage = () => {
                             <Heading level={3}>Project Details</Heading>
                         </IslandHeader>
                         <IslandContent>
-                            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                                <div className="flex flex-col gap-2">
+                            <Group className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+                                <Group className="flex flex-col gap-2">
                                     <Tag>Parent</Tag>
                                     <Text>{(project.parent_id && projects[project.parent_id]?.name) || 'None'}</Text>
-                                </div>
-                                <div className="flex flex-col gap-2">
+                                </Group>
+                                <Group className="flex flex-col gap-2">
                                     <Tag>Subprojects</Tag>
                                     <Text>{children.length}</Text>
-                                </div>
-                            </div>
+                                </Group>
+                            </Group>
                         </IslandContent>
                     </Island>
 
@@ -354,10 +352,14 @@ export const ProjectPage = () => {
                                             };
                                         })
                                         .filter((item): item is NonNullable<typeof item> => item !== undefined)}
-                                    onSelect={() => {}}
-                                    onMouseOut={() => {}}
-                                    onScrollToBottom={() => {}}
-                                    onResize={() => {}}
+                                    onSelect={() => {
+                                    }}
+                                    onMouseOut={() => {
+                                    }}
+                                    onScrollToBottom={() => {
+                                    }}
+                                    onResize={() => {
+                                    }}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -408,10 +410,14 @@ export const ProjectPage = () => {
                                             </>
                                         ),
                                     }))}
-                                    onSelect={() => {}}
-                                    onMouseOut={() => {}}
-                                    onScrollToBottom={() => {}}
-                                    onResize={() => {}}
+                                    onSelect={() => {
+                                    }}
+                                    onMouseOut={() => {
+                                    }}
+                                    onScrollToBottom={() => {
+                                    }}
+                                    onResize={() => {
+                                    }}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -462,10 +468,14 @@ export const ProjectPage = () => {
                                             </>
                                         ),
                                     }))}
-                                    onSelect={() => {}}
-                                    onMouseOut={() => {}}
-                                    onScrollToBottom={() => {}}
-                                    onResize={() => {}}
+                                    onSelect={() => {
+                                    }}
+                                    onMouseOut={() => {
+                                    }}
+                                    onScrollToBottom={() => {
+                                    }}
+                                    onResize={() => {
+                                    }}
                                     restoreActiveIndex={false}
                                     activateSingleItem={false}
                                     activateFirstItem={false}
@@ -567,6 +577,6 @@ export const ProjectPage = () => {
                 loading={createLoading}
                 error={createError}
             />
-        </div>
+        </Group>
     );
 };
