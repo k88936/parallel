@@ -8,7 +8,6 @@ import Content from '@jetbrains/ring-ui-built/components/island/content';
 import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
 import type {CreateTaskRequest, RepoConfig, SshKeyConfig, TaskPriority} from '../../types';
 import {df} from './dialogStyles';
-import Theme, {ThemeContext, ThemeProvider} from "@jetbrains/ring-ui-built/components/global/theme";
 
 interface CreateTaskDialogProps {
     show: boolean;
