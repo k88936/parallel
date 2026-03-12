@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
-import {selectProject, fetchProjectChildren, fetchRootProject, createProject, deleteProject, updateProject} from '../store/slices/projectsSlice';
+import {selectProject, fetchProjectChildren, createProject, deleteProject, updateProject} from '../store/slices/projectsSlice';
 import {createTask, clearCreateError} from '../store/slices/tasksSlice';
 import type {Project, CreateProjectRequest, SshKeyConfig, RepoConfig, CreateTaskRequest} from '../types';
 import styles from './ProjectPage.module.css';
@@ -31,7 +31,7 @@ export const ProjectPage = () => {
     const {projectId} = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const {projects, childrenByParent, rootProjectId, loading} = useAppSelector((state) => state.projects);
+    const {projects, childrenByParent, loading} = useAppSelector((state) => state.projects);
     const {createLoading, createError} = useAppSelector((state) => state.tasks);
     const [activeTab, setActiveTab] = useState<TabId>('overview');
     const [showAddDialog, setShowAddDialog] = useState(false);
@@ -44,15 +44,9 @@ export const ProjectPage = () => {
     const [deleteRepoTarget, setDeleteRepoTarget] = useState<RepoConfig | null>(null);
     const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
 
-    const actualProjectId = projectId === 'root' ? rootProjectId : projectId;
+    const actualProjectId = projectId;
     const project = actualProjectId ? projects[actualProjectId] : null;
     const children = actualProjectId ? (childrenByParent[actualProjectId] || []) : [];
-
-    useEffect(() => {
-        if (projectId === 'root' && !rootProjectId) {
-            dispatch(fetchRootProject());
-        }
-    }, [projectId, rootProjectId, dispatch]);
 
     useEffect(() => {
         if (actualProjectId) {
