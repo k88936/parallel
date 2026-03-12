@@ -119,10 +119,6 @@ impl TaskServiceTrait for TaskService {
         self.repository.set_claimed_by(task_id, worker_id).await
     }
 
-    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
-        self.repository.complete_iteration(task_id, status).await
-    }
-
     async fn set_review_data(&self, task_id: &Uuid, review_data: ReviewData) -> ServerResult<()> {
         self.repository
             .set_review_data(task_id, TaskStatus::AwaitingReview, &review_data)
@@ -256,8 +252,6 @@ pub trait TaskServiceTrait: Send + Sync {
     async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
 
     async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()>;
-
-    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
 
     async fn set_review_data(&self, task_id: &Uuid, review_data: ReviewData) -> ServerResult<()>;
 

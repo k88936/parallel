@@ -126,8 +126,6 @@ pub trait TaskRepositoryTrait: Send + Sync {
 
     async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()>;
 
-    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
-
     async fn set_review_data(&self, task_id: &Uuid, status: TaskStatus, review_data: &ReviewData) -> ServerResult<()>;
 
     async fn get_review_data(&self, task_id: &Uuid) -> ServerResult<Option<ReviewData>>;
@@ -396,41 +394,6 @@ impl TaskRepositoryTrait for TaskRepository {
 
         if rows_affected == 0 {
             return Err(ServerError::TaskNotFound(*task_id));
-        }
-
-        Ok(())
-    }
-
-    async fn complete_iteration(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
-        let now = Utc::now().naive_utc();
-        
-        let mut conn = self.get_conn()?;
-        
-        if status == TaskStatus::Completed || status == TaskStatus::Cancelled {
-            let rows_affected = diesel::update(tasks_schema::table)
-                .filter(tasks_schema::id.eq(task_id.to_string()))
-                .set((
-                    tasks_schema::status.eq(status.as_str()),
-                    tasks_schema::claimed_by.eq::<Option<String>>(None),
-                    tasks_schema::updated_at.eq(now),
-                ))
-                .execute(&mut conn)?;
-
-            if rows_affected == 0 {
-                return Err(ServerError::TaskNotFound(*task_id));
-            }
-        } else {
-            let rows_affected = diesel::update(tasks_schema::table)
-                .filter(tasks_schema::id.eq(task_id.to_string()))
-                .set((
-                    tasks_schema::status.eq(status.as_str()),
-                    tasks_schema::updated_at.eq(now),
-                ))
-                .execute(&mut conn)?;
-
-            if rows_affected == 0 {
-                return Err(ServerError::TaskNotFound(*task_id));
-            }
         }
 
         Ok(())

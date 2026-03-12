@@ -394,7 +394,7 @@ pub async fn update_task_status(
 
     state
         .task_service
-        .complete_iteration(&task_id, payload.status)
+        .update_status(&task_id, payload.status)
         .await
         .map_err(|e| {
             tracing::error!(

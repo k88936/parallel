@@ -65,7 +65,7 @@ impl EventProcessorTrait for EventProcessor {
                     let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
                     
                     self.task_service
-                        .complete_iteration(&task_id, TaskStatus::Completed)
+                        .update_status(&task_id, TaskStatus::Completed)
                         .await?;
                     
                     self.alert_service.emit(Alert::TaskCompleted {
@@ -82,9 +82,9 @@ impl EventProcessorTrait for EventProcessor {
                     let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
                     
                     self.task_service
-                        .complete_iteration(&task_id, TaskStatus::Failed)
+                        .fail_task(&task_id, &error)
                         .await?;
-                    
+
                     self.alert_service.emit(Alert::TaskFailed {
                         task_id,
                         task_title,
@@ -98,7 +98,7 @@ impl EventProcessorTrait for EventProcessor {
                     let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
                     
                     self.task_service
-                        .complete_iteration(&task_id, TaskStatus::Cancelled)
+                        .update_status(&task_id, TaskStatus::Cancelled)
                         .await?;
                     
                     self.alert_service.emit(Alert::TaskCancelled {
@@ -117,6 +117,10 @@ impl EventProcessorTrait for EventProcessor {
                     let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
 
                     let review_data = ReviewData { messages };
+
+                    self.task_service
+                        .update_status(&task_id, TaskStatus::AwaitingReview)
+                        .await?;
 
                     self.task_service
                         .set_review_data(&task_id, review_data)
