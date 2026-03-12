@@ -132,7 +132,7 @@ export const CreateTaskDialog = ({
             trapFocus
             dense
         >
-            <div style={{ width: 520 }}>
+            <div>
                 <form className="ring-form" onSubmit={handleSubmit}>
                     <span className="ring-form__title">Create Task</span>
 
