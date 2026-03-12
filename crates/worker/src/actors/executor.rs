@@ -151,25 +151,6 @@ async fn execute_task(
     )
     .await;
 
-    if !cancel_token.is_cancelled() && result.is_ok() {
-        tracing::info!(
-            task_id = %task.id,
-            target_branch = %task.target_branch,
-            "Committing and pushing changes"
-        );
-
-        let git = GitOps::open(&slot_path)?;
-        git.add_all()?;
-        git.commit(&format!("Implement: {}", task.description))?;
-        git.push(&task.target_branch, &task.ssh_key)?;
-
-        tracing::info!(
-            task_id = %task.id,
-            target_branch = %task.target_branch,
-            "Changes pushed successfully"
-        );
-    }
-
     if let Err(e) = repo_pool
         .send(ReleaseSlot {
             repo_url: task.repo_url.clone(),
@@ -297,6 +278,16 @@ async fn execute_agent(
                             let messages = client.get_messages().await;
                             let git = GitOps::open(workdir)?;
                             let diff = git.diff().unwrap_or_default();
+
+                            git.add_all()?;
+                            git.commit(&format!("Implement: {}", task.description))?;
+                            git.push(&task.target_branch, &task.ssh_key)?;
+
+                            tracing::info!(
+                                task_id = %task.id,
+                                target_branch = %task.target_branch,
+                                "Changes pushed successfully"
+                            );
 
                             tracing::info!("Task {} awaiting review", task_id);
                             let _ = event_tx.send(WorkerEvent::TaskAwaitingReview {
