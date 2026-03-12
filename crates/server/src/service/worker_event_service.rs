@@ -110,14 +110,13 @@ impl EventProcessorTrait for EventProcessor {
                 WorkerEvent::TaskAwaitingReview {
                     task_id,
                     messages,
-                    diff,
                 } => {
                     tracing::info!("Task {} awaiting review", task_id);
 
                     let task = self.task_service.get(&task_id).await.ok();
                     let task_title = task.map(|t| t.title).unwrap_or_else(|| task_id.to_string());
 
-                    let review_data = ReviewData { messages, diff };
+                    let review_data = ReviewData { messages };
 
                     self.task_service
                         .set_review_data(&task_id, review_data)

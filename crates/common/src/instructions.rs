@@ -58,7 +58,6 @@ pub enum MessageType {
 #[ts(export)]
 pub struct ReviewData {
     pub messages: Vec<AgentMessage>,
-    pub diff: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -131,7 +130,6 @@ pub enum WorkerEvent {
         #[ts(type = "string")]
         task_id: Uuid,
         messages: Vec<AgentMessage>,
-        diff: String,
     },
     TaskCompleted {
         #[ts(type = "string")]

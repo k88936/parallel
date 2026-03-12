@@ -293,7 +293,6 @@ async fn execute_agent(
                             let _ = event_tx.send(WorkerEvent::TaskAwaitingReview {
                                 task_id,
                                 messages,
-                                diff,
                             }).await;
 
                             tokio::select! {

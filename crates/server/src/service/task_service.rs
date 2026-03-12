@@ -196,7 +196,6 @@ impl TaskServiceTrait for TaskService {
                     updated.status,
                     &ReviewData {
                         messages: vec![],
-                        diff: String::new(),
                     },
                 )
                 .await?;
