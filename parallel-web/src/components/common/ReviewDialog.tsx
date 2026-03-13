@@ -9,11 +9,13 @@ import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
 import Text from '@jetbrains/ring-ui-built/components/text/text';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import Link from '@jetbrains/ring-ui-built/components/link/link';
+import Group from '@jetbrains/ring-ui-built/components/group/group';
 import clipboard from '@jetbrains/ring-ui-built/components/clipboard/clipboard';
 import Markdown from '@jetbrains/ring-ui-built/components/markdown/markdown';
 import MarkdownIt from 'markdown-it';
 import {highlight} from '@jetbrains/ring-ui-built/components/code/code';
 import type {Task, ReviewData, FeedbackType} from '../../types';
+import ScrollableSection from "@jetbrains/ring-ui-built/components/scrollable-section/scrollable-section";
 
 const markdownIt = new MarkdownIt('commonmark', {
     html: false,
@@ -58,20 +60,20 @@ export const ReviewDialog = ({
 
     const renderCheckoutCommand = () => (
         <Fragment>
-            <div>
+            <Group>
                 <code
                     className="block rounded bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-3 py-2 font-mono text-xs break-all">
                     {checkoutCommand}
                 </code>
-            </div>
-            <div>
+            </Group>
+            <Group>
                 <Link
                     onClick={() => clipboard.copyText(checkoutCommand, 'Command copied!', 'Command copying error')}
                     pseudo
                 >
                     Copy
                 </Link>
-            </div>
+            </Group>
         </Fragment>
     );
 
@@ -91,65 +93,64 @@ export const ReviewDialog = ({
             </IslandHeader>
             <IslandContent className="p-4">
                 {task ? (
-                    <div className="flex flex-col gap-4">
-                        <div>
+                    <Group className="flex flex-col gap-4">
+                        <Group>
                             <Heading level={4}>Checkout in local IDE</Heading>
-                            <div className="mt-2 flex flex-col gap-2">
+                            <Group className="mt-2 flex flex-col gap-2">
                                 {renderCheckoutCommand()}
-                            </div>
-                        </div>
+                            </Group>
+                        </Group>
 
-                        <div>
+                        <Group>
                             <Heading level={4}>Messages</Heading>
                             {loading && !reviewData ? (
-                                <div className="mt-2">
+                                <Group className="mt-2">
                                     <Loader/>
-                                </div>
+                                </Group>
                             ) : reviewData && reviewData.messages.length > 0 ? (
-                                <div className="mt-2 max-h-[320px] overflow-y-auto">
+                                <ScrollableSection className="mt-2 max-h-[320px] overflow-y-auto">
                                     {reviewData.messages.map((message, index) => (
-                                        <div
+                                        <Group
                                             key={`${message.timestamp}-${index}`}
-                                            className="mb-2 rounded bg-[var(--ring-sidebar-background-color,#1e1e1e)] p-3 last:mb-0"
+                                            className="mb-2 rounded  p-3 last:mb-0"
                                         >
-                                            <div className="mb-2 flex items-center gap-2">
+                                            <Group className="mb-2 flex items-center gap-2">
                                                 <Tag>{message.role}</Tag>
-                                                <span
-                                                    className="text-xs text-[var(--ring-secondary-text-color,#888)]">
+                                                <span className="text-xs text-gray-400">
                                                      {new Date(message.timestamp).toLocaleString()}
                                                  </span>
-                                            </div>
+                                            </Group>
                                             <Markdown>
                                                 <div dangerouslySetInnerHTML={{
                                                     __html: markdownIt.render(message.content),
                                                 }}/>
                                             </Markdown>
-                                        </div>
+                                        </Group>
                                     ))}
-                                </div>
+                                </ScrollableSection>
                             ) : (
                                 <Text className="mt-2">No review messages available yet.</Text>
                             )}
-                        </div>
+                        </Group>
 
-                        <div>
+                        <Group>
                             <Heading level={4}>Feedback</Heading>
-                            <div className="mt-2">
+                            <Group className="mt-2">
                                  <textarea
-                                     className="min-h-[120px] w-full rounded border  px-[10px] py-[6px] text-[13px] text-[var(--ring-text-color,#fff)] focus:outline-none focus:border-[var(--ring-focused-border-color,#4a90d9)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                     className="min-h-[120px] w-full rounded border  px-[10px] py-[6px] text-[13px] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                      value={feedbackMessage}
                                      onChange={(event) => onFeedbackChange(event.target.value)}
                                      placeholder="Add optional review feedback for the worker"
                                      disabled={submittingType !== null}
                                  />
-                            </div>
+                            </Group>
                             {feedbackError && (
-                                <Text className="mt-2 text-[var(--ring-error-color,#f44336)]">
+                                <Text className="mt-2 text-red-500">
                                     {feedbackError}
                                 </Text>
                             )}
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
                 ) : (
                     <Text>No review task selected.</Text>
                 )}

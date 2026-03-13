@@ -6,6 +6,8 @@ import Input from '@jetbrains/ring-ui-built/components/input/input';
 import Header from '@jetbrains/ring-ui-built/components/island/header';
 import Content from '@jetbrains/ring-ui-built/components/island/content';
 import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
+import Group from '@jetbrains/ring-ui-built/components/group/group';
+import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import type {CreateTaskRequest, RepoConfig, SshKeyConfig, TaskPriority} from '../../types';
 import {df} from './dialogStyles';
 
@@ -140,11 +142,11 @@ export const CreateTaskDialog = ({
             <form onSubmit={handleSubmit}>
                 <Header>Create Task</Header>
                 <Content className={df.form}>
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label htmlFor="task-title" className={df.label}>
                             Title
                         </label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <input
                                 id="task-title"
                                 className={`${df.input} ${df.inputM}`}
@@ -154,14 +156,14 @@ export const CreateTaskDialog = ({
                                 placeholder="Task title (default: current time)"
                                 disabled={loading}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label htmlFor="task-description" className={df.label}>
-                            Description <span className="text-[var(--ring-error-color,#f00)]">*</span>
+                            Description <span className="text-red-500">*</span>
                         </label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <textarea
                                 id="task-description"
                                 className={`${df.input} ${df.inputM} ${descriptionError ? df.inputError : ''}`}
@@ -178,12 +180,12 @@ export const CreateTaskDialog = ({
                                 style={{resize: 'vertical'}}
                             />
                             {descriptionError && <div className={df.errorBubble}>{descriptionError}</div>}
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label className={df.label}>Repository</label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <Select
                                 data={repoOptions}
                                 selected={selectedRepo}
@@ -191,12 +193,12 @@ export const CreateTaskDialog = ({
                                 disabled={loading || repos.length === 0}
                                 type={Select.Type.INLINE}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label className={df.label}>SSH Key</label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <Select
                                 data={sshKeyOptions}
                                 selected={selectedSshKey}
@@ -204,14 +206,14 @@ export const CreateTaskDialog = ({
                                 disabled={loading || sshKeys.length === 0}
                                 type={Select.Type.INLINE}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label htmlFor="task-base-branch" className={df.label}>
                             Base Branch
                         </label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <input
                                 id="task-base-branch"
                                 className={`${df.input} ${df.inputM}`}
@@ -221,14 +223,14 @@ export const CreateTaskDialog = ({
                                 placeholder="main"
                                 disabled={loading}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label htmlFor="task-target-branch" className={df.label}>
                             Target Branch
                         </label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <input
                                 id="task-target-branch"
                                 className={`${df.input} ${df.inputM}`}
@@ -238,12 +240,12 @@ export const CreateTaskDialog = ({
                                 placeholder="Auto-generated if empty"
                                 disabled={loading}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label className={df.label}>Priority</label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <Select
                                 data={PRIORITY_OPTIONS}
                                 selected={selectedPriority}
@@ -251,14 +253,14 @@ export const CreateTaskDialog = ({
                                 disabled={loading}
                                 type={Select.Type.INLINE}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label htmlFor="task-max-time" className={df.label}>
                             Max Execution Time (s)
                         </label>
-                        <div className={df.control}>
+                        <Group className={df.control}>
                             <input
                                 id="task-max-time"
                                 className={`${df.input} ${df.inputM}`}
@@ -269,13 +271,13 @@ export const CreateTaskDialog = ({
                                 disabled={loading}
                                 min={1}
                             />
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
-                    <div className={df.group}>
+                    <Group className={df.group}>
                         <label className={df.label}>Required Labels</label>
-                        <div className={df.control}>
-                            <div className="flex gap-2 mb-2">
+                        <Group className={df.control}>
+                            <Group className="flex gap-2 mb-2">
                                 <Input
                                     value={labelValue}
                                     onChange={(e) => setLabelValue(e.target.value)}
@@ -285,28 +287,26 @@ export const CreateTaskDialog = ({
                                 <Button type="button" onClick={handleAddLabel} disabled={loading || !labelValue.trim()}>
                                     Add
                                 </Button>
-                            </div>
+                            </Group>
                             {Object.entries(labels).map(([key, value]) => (
-                                <div key={key} className="flex items-center gap-2 mb-1">
-                                    <span className="px-2 py-0.5 bg-[#333] rounded text-sm">
-                                        {key}: {value}
-                                    </span>
+                                <Group key={key} className="flex items-center gap-2 mb-1">
+                                    <Tag>{key}: {value}</Tag>
                                     <Button danger inline type="button" onClick={() => handleRemoveLabel(key)}
                                             disabled={loading}>
                                         Remove
                                     </Button>
-                                </div>
+                                </Group>
                             ))}
-                        </div>
-                    </div>
+                        </Group>
+                    </Group>
 
                     {error && (
-                        <div className={df.group}>
-                            <div className={df.label}/>
-                            <div className={df.control}>
+                        <Group className={df.group}>
+                            <Group className={df.label}/>
+                            <Group className={df.control}>
                                 <div className={df.errorBubble}>{error}</div>
-                            </div>
-                        </div>
+                            </Group>
+                        </Group>
                     )}
                 </Content>
                 <Panel className="flex justify-end gap-2">

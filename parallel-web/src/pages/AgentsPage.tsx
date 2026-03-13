@@ -150,7 +150,7 @@ export const AgentsPage = () => {
                 ) : workers.length === 0 ? (
                     <Text>No agents connected</Text>
                 ) : (
-                    <div className="p-0">
+                    <Group className="p-0">
                         {workers.map((worker) => (
                             <Group
                                 key={worker.id}
@@ -170,7 +170,7 @@ export const AgentsPage = () => {
                                 </Group>
                             </Group>
                         ))}
-                    </div>
+                    </Group>
                 )}
             </Sidebar>
 
@@ -199,44 +199,44 @@ export const AgentsPage = () => {
                                     <Heading level={3}>Info</Heading>
                                 </IslandHeader>
                                 <IslandContent>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Name
-                                            </div>
-                                            <div className="text-sm">{selectedWorkerInfo.name}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">ID
-                                            </div>
-                                            <div className="text-sm">{selectedWorkerInfo.id.substring(0, 8)}...</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <div
+                                    <Group className="grid grid-cols-2 gap-3">
+                                        <Group className="flex flex-col gap-1">
+                                            <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Name
+                                            </Group>
+                                            <Group className="text-sm">{selectedWorkerInfo.name}</Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">ID
+                                            </Group>
+                                            <Group className="text-sm">{selectedWorkerInfo.id.substring(0, 8)}...</Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Group
                                                 className="text-xs text-[var(--ring-secondary-text-color,#888)]">Status
-                                            </div>
-                                            <div className="text-sm">{selectedWorkerInfo.status}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max
+                                            </Group>
+                                            <Group className="text-sm">{selectedWorkerInfo.status}</Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max
                                                 Concurrent
-                                            </div>
-                                            <div className="text-sm">{selectedWorkerInfo.max_concurrent}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Has
+                                            </Group>
+                                            <Group className="text-sm">{selectedWorkerInfo.max_concurrent}</Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Has
                                                 Git
-                                            </div>
-                                            <div
-                                                className="text-sm">{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Last
+                                            </Group>
+                                            <Group
+                                                className="text-sm">{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Last
                                                 Heartbeat
-                                            </div>
-                                            <div
-                                                className="text-sm">{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
-                                        </div>
-                                    </div>
+                                            </Group>
+                                            <Group
+                                                className="text-sm">{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</Group>
+                                        </Group>
+                                    </Group>
                                 </IslandContent>
                             </Island>
 
@@ -246,53 +246,53 @@ export const AgentsPage = () => {
                                         <Heading level={3}>Resources</Heading>
                                     </IslandHeader>
                                     <IslandContent>
-                                        <div className="mb-3 last:mb-0">
-                                            <div className="flex justify-between mb-1">
-                                                <span>CPU</span>
-                                                <span>{selectedWorkerResources.cpu_usage_percent.toFixed(1)}%</span>
-                                            </div>
-                                            <div
+                                        <Group className="mb-3 last:mb-0">
+                                            <Group className="flex justify-between mb-1">
+                                                <Text>CPU</Text>
+                                                <Text>{selectedWorkerResources.cpu_usage_percent.toFixed(1)}%</Text>
+                                            </Group>
+                                            <Group
                                                 className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
-                                                <div
+                                                <Group
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.cpu_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.cpu_usage_percent}%`}}
                                                 />
-                                            </div>
-                                        </div>
+                                            </Group>
+                                        </Group>
 
-                                        <div className="mb-3 last:mb-0">
-                                            <div className="flex justify-between mb-1">
-                                                <span>Memory</span>
-                                                <span>
+                                        <Group className="mb-3 last:mb-0">
+                                            <Group className="flex justify-between mb-1">
+                                                <Text>Memory</Text>
+                                                <Text>
                                                     {selectedWorkerResources.memory_used_mb}MB / {selectedWorkerResources.memory_total_mb}MB (
                                                     {selectedWorkerResources.memory_usage_percent.toFixed(1)}%)
-                                                </span>
-                                            </div>
-                                            <div
+                                                </Text>
+                                            </Group>
+                                            <Group
                                                 className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
-                                                <div
+                                                <Group
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.memory_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.memory_usage_percent}%`}}
                                                 />
-                                            </div>
-                                        </div>
+                                            </Group>
+                                        </Group>
 
-                                        <div className="mb-3 last:mb-0">
-                                            <div className="flex justify-between mb-1">
-                                                <span>Disk</span>
-                                                <span>
+                                        <Group className="mb-3 last:mb-0">
+                                            <Group className="flex justify-between mb-1">
+                                                <Text>Disk</Text>
+                                                <Text>
                                                     {selectedWorkerResources.disk_used_gb.toFixed(1)}GB / {selectedWorkerResources.disk_total_gb.toFixed(1)}GB (
                                                     {selectedWorkerResources.disk_usage_percent.toFixed(1)}%)
-                                                </span>
-                                            </div>
-                                            <div
+                                                </Text>
+                                            </Group>
+                                            <Group
                                                 className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
-                                                <div
+                                                <Group
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.disk_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.disk_usage_percent}%`}}
                                                 />
-                                            </div>
-                                        </div>
+                                            </Group>
+                                        </Group>
                                     </IslandContent>
                                 </Island>
                             )}
@@ -302,37 +302,37 @@ export const AgentsPage = () => {
                                     <Heading level={3}>Capabilities</Heading>
                                 </IslandHeader>
                                 <IslandContent>
-                                    <div className="flex flex-col gap-1">
-                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Available
+                                    <Group className="flex flex-col gap-1">
+                                        <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Available
                                             Agents
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
+                                        </Group>
+                                        <Group className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.available_agents.length > 0 ? (
                                                 selectedWorkerInfo.capabilities.available_agents.map((agent) => <Tag
                                                     key={agent}>{agent}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-1 mt-3">
-                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Supported
+                                        </Group>
+                                    </Group>
+                                    <Group className="flex flex-col gap-1 mt-3">
+                                        <Group className="text-xs text-[var(--ring-secondary-text-color,#888)]">Supported
                                             Languages
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
+                                        </Group>
+                                        <Group className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.supported_languages.length > 0 ? (
                                                 selectedWorkerInfo.capabilities.supported_languages.map((language) =>
                                                     <Tag key={language}>{language}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
-                                        </div>
-                                    </div>
+                                        </Group>
+                                    </Group>
                                 </IslandContent>
                             </Island>
                         </Group>
 
-                        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                        <Group className="flex-1 flex flex-col overflow-hidden min-h-0">
                             <Island className="flex-1 flex flex-col overflow-hidden">
                                 <IslandHeader border>
                                     <Heading level={3}>Current Tasks</Heading>
@@ -342,15 +342,15 @@ export const AgentsPage = () => {
                                     {selectedWorkerInfo.current_tasks.length === 0 ? (
                                         <Text>No tasks running</Text>
                                     ) : (
-                                        <div className="flex flex-wrap gap-1.5">
+                                        <Group className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.current_tasks.map((taskId) => (
                                                 <Tag key={taskId}>{taskId.substring(0, 8)}...</Tag>
                                             ))}
-                                        </div>
+                                        </Group>
                                     )}
                                 </IslandContent>
                             </Island>
-                        </div>
+                        </Group>
                     </Group>
                 ) : null}
             </Group>

@@ -5,6 +5,7 @@ import {Sidebar} from './Sidebar';
 
 import Text from '@jetbrains/ring-ui-built/components/text/text';
 import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
+import Group from '@jetbrains/ring-ui-built/components/group/group';
 
 interface ProjectSidebarProps {
     projects: Record<string, Project>;
@@ -44,16 +45,16 @@ export const ProjectSidebar = ({
     return (
         <Sidebar title="Projects">
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center p-4 gap-2">
+                    <Group className="flex flex-col items-center justify-center p-4 gap-2">
                         <Loader/>
                         <Text>Loading...</Text>
-                    </div>
+                    </Group>
                 ) : error && !projects.root ? (
-                    <div className="flex flex-col items-center justify-center p-4 gap-2">
+                    <Group className="flex flex-col items-center justify-center p-4 gap-2">
                         <Text>{error}</Text>
-                    </div>
+                    </Group>
                 ) : projects.root ? (
-                    <div className="p-2">
+                    <Group className="p-2">
                         <ProjectTree
                             projectId="root"
                             projects={projects}
@@ -63,11 +64,11 @@ export const ProjectSidebar = ({
                             onNodeClick={handleNodeClick}
                             onNodeToggle={handleNodeToggle}
                         />
-                    </div>
+                    </Group>
                 ) : (
-                    <div className="flex flex-col items-center justify-center p-4 gap-2">
+                    <Group className="flex flex-col items-center justify-center p-4 gap-2">
                         <Text>No projects available</Text>
-                    </div>
+                    </Group>
                 )}
         </Sidebar>
     );

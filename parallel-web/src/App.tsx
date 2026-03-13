@@ -10,7 +10,7 @@ export const App = () => {
         <ThemeProvider theme={Theme.LIGHT}>
             <AlertProvider>
                 <BrowserRouter>
-                    <Group className="flex flex-row min-h-screen bg-(--ring-secondary-background-color)">
+                    <Group className="flex flex-row min-h-screen">
                         <AppHeader />
                         <Routes>
                             <Route path="/" element={<Navigate to="/projects/root" replace />} />

@@ -176,17 +176,17 @@ export const ProjectPage = () => {
 
     if (!actualProjectId || pageLoading || (loading && !project)) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <Group className="flex-1 flex flex-col items-center justify-center gap-4">
                 <Loader message="Loading project..."/>
-            </div>
+            </Group>
         );
     }
 
     if (!project) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <Group className="flex-1 flex flex-col items-center justify-center gap-4">
                 <Text>{pageError || error || 'Project not found'}</Text>
-            </div>
+            </Group>
         );
     }
 

@@ -4,6 +4,7 @@ import {projectsApi} from '../../api';
 import type {Project} from '../../types';
 import {ProjectSidebar} from './ProjectSidebar.tsx';
 import type {ProjectLayoutContextValue} from './ProjectLayoutContext';
+import Group from '@jetbrains/ring-ui-built/components/group/group';
 
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) {
@@ -195,7 +196,7 @@ export const ProjectLayout = () => {
     ]);
 
     return (
-        <div className="flex flex-1 overflow-hidden">
+        <Group className="flex flex-1 overflow-hidden">
             <ProjectSidebar
                 projects={projects}
                 childrenByParent={childrenByParent}
@@ -212,9 +213,9 @@ export const ProjectLayout = () => {
                 }}
                 onLoadChildren={ensureChildrenLoaded}
             />
-            <main className="flex-1 flex flex-col overflow-hidden p-4">
+            <Group className="flex-1 flex flex-col overflow-hidden p-4">
                 <Outlet context={contextValue} />
-            </main>
-        </div>
+            </Group>
+        </Group>
     );
 };

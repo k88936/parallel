@@ -353,7 +353,7 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
             title: 'ID',
             className: 'align-top whitespace-nowrap',
             getValue: (task) => (
-                <code className="font-mono text-xs text-[var(--ring-text-color,#fff)]">
+                <code className="font-mono text-xs">
                     {shortenId(task.id)}
                 </code>
             ),
@@ -364,9 +364,9 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
             title: 'Title',
             className: 'align-top',
             getValue: (task) => (
-                <div className="max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap">
+                <Group className="max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap">
                     {task.title}
-                </div>
+                </Group>
             ),
         },
         {
@@ -395,7 +395,7 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
             id: 'created_at',
             sortable: true,
             title: 'Age',
-            className: 'align-top whitespace-nowrap text-[var(--ring-secondary-text-color,#888)]',
+            className: 'align-top whitespace-nowrap',
             getValue: (task) => formatTimeAgo(task.created_at),
         },
     ], []);
@@ -454,17 +454,17 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                     </Group>
 
                     {error && tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
-                            <Text>{error}</Text>
-                        </div>
+                        <Group className="flex items-center justify-center h-50">
+                            <Text info>{error}</Text>
+                        </Group>
                     ) : loading && tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
+                        <Group className="flex items-center justify-center h-50">
                             <Loader/>
-                        </div>
+                        </Group>
                     ) : tasks.length === 0 ? (
-                        <div className="flex items-center justify-center h-50 text-(--ring-secondary-text-color)">
-                            <Text>No tasks found</Text>
-                        </div>
+                        <Group className="flex items-center justify-center h-50">
+                            <Text info>No tasks found</Text>
+                        </Group>
                     ) : (
                         <>
                             <TableContainer<QueueTask>
@@ -474,8 +474,8 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                                 getItemClassName={(task) => [
                                     'cursor-pointer transition-colors',
                                     task.id === selectedTaskId
-                                        ? 'bg-[var(--ring-selected-background-color,#2a2a2a)]'
-                                        : 'hover:bg-[var(--ring-hover-background-color,#2d2d2d)]',
+                                        ? 'bg-blue-100'
+                                        : 'hover:bg-gray-100',
                                 ].join(' ')}
                                 getItemKey={(task) => task.id}
                                 onItemClick={(task) => handleExpand(task.id)}
@@ -489,87 +489,78 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                             />
 
                             {selectedTask && (
-                                <div
-                                    className="mb-4 rounded border border-[var(--ring-border-color,#3d3d3d)] bg-[var(--ring-selected-background-color,#252525)] p-4 pb-6">
-                                    <div className="mb-4 flex items-center justify-between gap-4">
-                                        <div>
+                                <Island className="mb-4">
+                                    <Group className="mb-4 flex items-center justify-between gap-4 p-4 pb-0">
+                                        <Group>
                                             <Heading level={3}>{selectedTask.title}</Heading>
-                                            <Text className="text-[var(--ring-secondary-text-color,#888)]">
+                                            <Text info size={Text.Size.S}>
                                                 Task {shortenId(selectedTask.id)}
                                             </Text>
-                                        </div>
+                                        </Group>
                                         <Button onClick={() => setSelectedTaskId(null)}>Close Details</Button>
-                                    </div>
+                                    </Group>
 
-                                    <div className="grid grid-cols-3 gap-4 mb-4">
-                                        <div className="flex flex-col gap-1">
-                                            <span
-                                                className="text-xs text-[var(--ring-secondary-text-color,#888)]">Description</span>
-                                            <span
-                                                className="text-sm">{selectedTask.description || 'No description'}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span
-                                                className="text-xs text-[var(--ring-secondary-text-color,#888)]">Repository</span>
-                                            <span className="text-sm">
+                                    <Group className="grid grid-cols-3 gap-4 mb-4 p-4 pt-0">
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Description</Text>
+                                            <Text>{selectedTask.description || 'No description'}</Text>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Repository</Text>
+                                            <Group>
                                                 <code
-                                                    className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.repo_url}</code>
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Base Branch</span>
-                                            <span className="text-sm">
+                                                    className="font-mono text-xs px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.repo_url}</code>
+                                            </Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Base Branch</Text>
+                                            <Group>
                                                 <code
-                                                    className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.base_branch}</code>
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Target Branch</span>
-                                            <span className="text-sm">
+                                                    className="font-mono text-xs px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.base_branch}</code>
+                                            </Group>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Target Branch</Text>
+                                            <Group>
                                                 <code
-                                                    className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.target_branch}</code>
-                                            </span>
-                                        </div>
+                                                    className="font-mono text-xs px-1.5 py-0.5 rounded-[3px] break-all">{selectedTask.target_branch}</code>
+                                            </Group>
+                                        </Group>
                                         {selectedTask.claimed_by && (
-                                            <div className="flex flex-col gap-1">
-                                                <span
-                                                    className="text-xs text-[var(--ring-secondary-text-color,#888)]">Worker</span>
-                                                <span className="text-sm">
+                                            <Group className="flex flex-col gap-1">
+                                                <Text info size={Text.Size.S}>Worker</Text>
+                                                <Group>
                                                     <code
-                                                        className="font-mono text-xs bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-1.5 py-0.5 rounded-[3px] break-all">{shortenId(selectedTask.claimed_by)}</code>
-                                                </span>
-                                            </div>
+                                                        className="font-mono text-xs px-1.5 py-0.5 rounded-[3px] break-all">{shortenId(selectedTask.claimed_by)}</code>
+                                                </Group>
+                                            </Group>
                                         )}
-                                        <div className="flex flex-col gap-1">
-                                            <span
-                                                className="text-xs text-[var(--ring-secondary-text-color,#888)]">Created</span>
-                                            <span
-                                                className="text-sm">{new Date(selectedTask.created_at).toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span
-                                                className="text-xs text-[var(--ring-secondary-text-color,#888)]">Updated</span>
-                                            <span
-                                                className="text-sm">{new Date(selectedTask.updated_at).toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max Execution</span>
-                                            <span className="text-sm">{selectedTask.max_execution_time}s</span>
-                                        </div>
-                                    </div>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Created</Text>
+                                            <Text>{new Date(selectedTask.created_at).toLocaleString()}</Text>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Updated</Text>
+                                            <Text>{new Date(selectedTask.updated_at).toLocaleString()}</Text>
+                                        </Group>
+                                        <Group className="flex flex-col gap-1">
+                                            <Text info size={Text.Size.S}>Max Execution</Text>
+                                            <Text>{selectedTask.max_execution_time}s</Text>
+                                        </Group>
+                                    </Group>
 
                                     {Object.keys(selectedTask.required_labels).length > 0 && (
-                                        <div className="mb-4">
-                                            <span className="text-xs text-[var(--ring-secondary-text-color,#888)]">Required Labels</span>
-                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                        <Group className="mb-4 p-4 pt-0">
+                                            <Text info size={Text.Size.S}>Required Labels</Text>
+                                            <Group className="flex flex-wrap gap-1.5 mt-2">
                                                 {Object.entries(selectedTask.required_labels).map(([labelKey, labelValue]) => (
                                                     <Tag key={labelKey}>{`${labelKey}: ${labelValue}`}</Tag>
                                                 ))}
-                                            </div>
-                                        </div>
+                                            </Group>
+                                        </Group>
                                     )}
 
-                                    <div className="flex gap-2 mb-4">
+                                    <Group className="flex gap-2 mb-4 p-4 pt-0">
                                         {(selectedTask.status === 'queued' ||
                                             selectedTask.status === 'created' ||
                                             selectedTask.status === 'in_progress' ||
@@ -588,10 +579,10 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                                                 Review & Feedback
                                             </Button>
                                         )}
-                                    </div>
+                                    </Group>
 
                                     {selectedTask.status === 'awaiting_review' && (
-                                        <div className="mt-4 pt-4 border-t border-[var(--ring-border-color,#3d3d3d)]">
+                                        <Group className="mt-4 pt-4 border-t p-4 pt-4">
                                             <Heading level={4}>Review Required</Heading>
                                             {selectedTaskReviewLoading && !selectedTaskReviewData ? (
                                                 <Loader/>
@@ -601,15 +592,15 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                                                     command, and send feedback.
                                                 </Text>
                                             )}
-                                        </div>
+                                        </Group>
                                     )}
-                                </div>
+                                </Island>
                             )}
                         </>
                     )}
 
                     {total > 0 && (
-                        <div className="pt-4">
+                        <Group className="pt-4">
                             <Pager
                                 currentPage={currentPage}
                                 disablePageSizeSelector
@@ -617,10 +608,10 @@ export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps
                                 pageSize={PAGE_SIZE}
                                 total={total}
                             />
-                            <Text className="mt-2 text-[var(--ring-secondary-text-color,#888)]">
+                            <Text info className="mt-2">
                                 Showing {tasks.length} tasks on page {currentPage}
                             </Text>
-                        </div>
+                        </Group>
                     )}
                 </IslandContent>
             </Island>

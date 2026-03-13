@@ -3,6 +3,7 @@ import type {Project} from '../../types';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import {Color} from '@jetbrains/ring-ui-built/components/icon/icon.constants';
+import Group from '@jetbrains/ring-ui-built/components/group/group';
 
 import folderIcon from '@jetbrains/icons/folder';
 import chevronRightIcon from '@jetbrains/icons/chevron-right';
@@ -36,8 +37,8 @@ export const ProjectTree = ({
     const hasChildren = children.length > 0;
 
     return (
-        <div className="select-none">
-            <div className={`flex items-center px-2 py-1 rounded gap-0.5 hover:bg-[var(--ring-hover-background-color,#2d2d2d)] ${isSelected ? 'bg-[var(--ring-selected-background-color,#3d3d3d)]' : ''}`}>
+        <Group className="select-none">
+            <Group className={`flex items-center px-2 py-1 rounded gap-0.5 ${isSelected ? '' : ''}`}>
                 <Button
                     inline
                     className={`w-5 min-w-[20px] !p-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
@@ -60,9 +61,9 @@ export const ProjectTree = ({
                 >
                     {project.name}
                 </Button>
-            </div>
+            </Group>
             {isExpanded && hasChildren && (
-                <div className="pl-4">
+                <Group className="pl-4">
                     {children.map((childId) => (
                         <ProjectTree
                             key={childId}
@@ -75,8 +76,8 @@ export const ProjectTree = ({
                             onNodeToggle={onNodeToggle}
                         />
                     ))}
-                </div>
+                </Group>
             )}
-        </div>
+        </Group>
     );
 };
