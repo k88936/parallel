@@ -9,7 +9,9 @@ import Checkbox from '@jetbrains/ring-ui-built/components/checkbox/checkbox';
 import Select from '@jetbrains/ring-ui-built/components/select/select';
 import {useAlertPreferences, type AlertType, type AudioCategory, type EventAudioConfig} from '../contexts/AlertContext';
 import {getRandomAudioFile, getAudioPath, playAudioFile} from '../services/audioAlerts';
-import './SettingsPage.css';
+import ScrollableSection from "@jetbrains/ring-ui-built/components/scrollable-section/scrollable-section";
+import Group from "@jetbrains/ring-ui-built/components/group/group.js";
+import Panel from "@jetbrains/ring-ui-built/components/panel/panel";
 
 interface CategoryOption {
     key: AudioCategory;
@@ -75,16 +77,12 @@ export const SettingsPage = () => {
         setEventConfig(eventType, {...eventConfigs[eventType], enabled: !eventConfigs[eventType].enabled});
     }, [eventConfigs, setEventConfig]);
 
-    const handleVolumeChange = useCallback((eventType: AlertType, volume: number) => {
-        setEventConfig(eventType, {...eventConfigs[eventType], volume});
-    }, [eventConfigs, setEventConfig]);
-
     const handlePreview = useCallback(async (eventType: AlertType) => {
         setPreviewingEvent(eventType);
         const config = eventConfigs[eventType];
         const audioFile = getRandomAudioFile(config.category);
         const audioPath = getAudioPath(audioFile);
-        
+
         try {
             await playAudioFile(audioPath, config.volume);
         } catch (err) {
@@ -100,70 +98,57 @@ export const SettingsPage = () => {
                 <Heading level={1}>Alert Sound Settings</Heading>
             </IslandHeader>
             <IslandContent>
-                <div className="settings-container">
-                    <Text>Configure sound effects for each event type. Each event can use a different sound category and volume.</Text>
+                <ScrollableSection>
+                    <Text>Configure sound effects for each event type. Each event can use a different sound category and
+                        volume.</Text>
 
                     {EVENT_CONFIGS.map(eventConfig => {
                         const config = eventConfigs[eventConfig.type];
                         const selectedCategory = AUDIO_CATEGORIES.find(cat => cat.key === config.category);
 
                         return (
-                            <div key={eventConfig.type} className="settings-section event-section">
-                                <div className="event-header">
+                            <Island key={eventConfig.type}>
+                                <IslandHeader className="event-header">
                                     <Checkbox
                                         checked={config.enabled}
                                         onChange={() => handleToggle(eventConfig.type)}
                                     >
                                         <strong>{eventConfig.label}</strong>
                                     </Checkbox>
-                                </div>
-                                <p className="event-description">{eventConfig.description}</p>
+                                </IslandHeader>
+                                <IslandContent>
 
-                                {config.enabled && (
-                                    <div className="event-controls">
-                                        <div className="settings-option">
-                                            <label className="settings-label">Sound Category</label>
+                                    <Text className="event-description">{eventConfig.description}</Text>
+
+
+                                    {config.enabled && (
+                                        <Panel className={"gap-4"}>
                                             <Select
                                                 data={AUDIO_CATEGORIES}
                                                 selected={selectedCategory}
                                                 onSelect={(cat) => handleCategoryChange(eventConfig.type, cat)}
                                             />
-                                        </div>
 
-                                        <div className="settings-option">
-                                            <label className="settings-label">
-                                                Volume: {(config.volume * 100).toFixed(0)}%
-                                            </label>
-                                            <input
-                                                type="range"
-                                                min="0"
-                                                max="1"
-                                                step="0.1"
-                                                value={config.volume}
-                                                onChange={(e) => handleVolumeChange(eventConfig.type, parseFloat(e.target.value))}
-                                                className="settings-slider"
-                                            />
-                                        </div>
-
-                                        <div className="settings-option">
-                                            <Button
-                                                onClick={() => handlePreview(eventConfig.type)}
-                                                disabled={previewingEvent === eventConfig.type}
-                                            >
-                                                {previewingEvent === eventConfig.type ? 'Playing...' : 'Preview Sound'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                            <Group>
+                                                <Button
+                                                    onClick={() => handlePreview(eventConfig.type)}
+                                                    disabled={previewingEvent === eventConfig.type}
+                                                >
+                                                    {previewingEvent === eventConfig.type ? 'Playing...' : 'Preview Sound'}
+                                                </Button>
+                                            </Group>
+                                        </Panel>
+                                    )}
+                                </IslandContent>
+                            </Island>
                         );
                     })}
 
                     {/* Reset Button */}
-                    <div className="settings-section settings-actions">
+                    <Group>
                         <Button onClick={resetToDefaults}>Reset All to Defaults</Button>
-                    </div>
-                </div>
+                    </Group>
+                </ScrollableSection>
             </IslandContent>
         </Island>
     );
