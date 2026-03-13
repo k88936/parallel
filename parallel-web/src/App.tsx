@@ -7,7 +7,7 @@ import Group from "@jetbrains/ring-ui-built/components/group/group.js";
 
 export const App = () => {
     return (
-        <ThemeProvider theme={Theme.DARK}>
+        <ThemeProvider theme={Theme.LIGHT}>
             <AlertProvider>
                 <BrowserRouter>
                     <Group className="flex flex-row min-h-screen bg-(--ring-secondary-background-color)">

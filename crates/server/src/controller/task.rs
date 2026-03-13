@@ -5,14 +5,49 @@ use axum::{
 };
 use tower_http::request_id::RequestId;
 use uuid::Uuid;
+use std::collections::HashSet;
 
 use parallel_common::*;
 
 use crate::api_error::{ApiResult, ErrorResponse};
 use crate::error_codes::ErrorCode;
-use crate::errors::ServerError;
+use crate::errors::{ServerError, ServerResult};
 use crate::service::task_service::TaskListParams;
 use crate::state::AppState;
+
+async fn collect_ancestor_repos_and_keys(
+    project_id: &str,
+    state: &AppState,
+) -> ServerResult<(Vec<RepoConfig>, Vec<SshKeyConfig>)> {
+    let mut repos = Vec::new();
+    let mut ssh_keys = Vec::new();
+    let mut seen_repos = HashSet::new();
+    let mut seen_keys = HashSet::new();
+
+    let mut current_id = Some(project_id.to_string());
+
+    while let Some(id) = current_id {
+        let project = state.project_service.get(&id).await?;
+
+        for repo in &project.repos {
+            if !seen_repos.contains(&repo.name) {
+                repos.push(repo.clone());
+                seen_repos.insert(repo.name.clone());
+            }
+        }
+
+        for key in &project.ssh_keys {
+            if !seen_keys.contains(&key.name) {
+                ssh_keys.push(key.clone());
+                seen_keys.insert(key.name.clone());
+            }
+        }
+
+        current_id = project.parent_id;
+    }
+
+    Ok((repos, ssh_keys))
+}
 
 pub async fn create_task(
     State(state): State<AppState>,
@@ -34,29 +69,29 @@ pub async fn create_task(
 
     let (repo_url, ssh_key) = {
         let project_id: &str = payload.project_id.as_str();
-        let project = state.project_service.get(project_id).await.map_err(|e| {
+        
+        let (all_repos, all_ssh_keys) = collect_ancestor_repos_and_keys(project_id, &state).await.map_err(|e| {
             tracing::error!(
                 correlation_id = ?correlation_id,
                 project_id = %project_id,
                 error = %e,
-                "Failed to get project"
+                "Failed to collect ancestor repos and keys"
             );
-            ErrorResponse::new(ErrorCode::InternalError, "Failed to get project")
+            ErrorResponse::new(ErrorCode::InternalError, "Failed to collect ancestor repos and keys")
                 .with_details(e.to_string())
                 .with_correlation_id(correlation_id.unwrap_or_default())
         })?;
 
         let repo_url = {
             let repo_ref: &str = payload.repo_ref.as_str();
-            project
-                .repos
+            all_repos
                 .iter()
                 .find(|r| &r.name == repo_ref)
                 .map(|r| r.url.clone())
                 .ok_or_else(|| {
                     ErrorResponse::new(
                         ErrorCode::InternalError,
-                        format!("Repo '{}' not found in project", repo_ref),
+                        format!("Repo '{}' not found in project or ancestors", repo_ref),
                     )
                     .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
@@ -64,15 +99,14 @@ pub async fn create_task(
 
         let ssh_key = {
             let key_ref = payload.ssh_key_ref.as_str();
-            project
-                .ssh_keys
+            all_ssh_keys
                 .iter()
                 .find(|k| &k.name == key_ref)
                 .map(|k| k.key.clone())
                 .ok_or_else(|| {
                     ErrorResponse::new(
                         ErrorCode::InternalError,
-                        format!("SSH key '{}' not found in project", key_ref),
+                        format!("SSH key '{}' not found in project or ancestors", key_ref),
                     )
                     .with_correlation_id(correlation_id.unwrap_or_default())
                 })?
