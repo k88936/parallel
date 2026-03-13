@@ -122,7 +122,7 @@ pub trait TaskRepositoryTrait: Send + Sync {
 
     async fn count(&self, status: Option<TaskStatus>) -> Result<u64>;
 
-    async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
+    async fn set_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
 
     async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()>;
 
@@ -361,7 +361,7 @@ impl TaskRepositoryTrait for TaskRepository {
         Ok(count)
     }
 
-    async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
+    async fn set_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
         let now = Utc::now().naive_utc();
         
         let mut conn = self.get_conn()?;

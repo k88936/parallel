@@ -112,7 +112,7 @@ impl TaskServiceTrait for TaskService {
     }
 
     async fn update_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
-        self.repository.update_status(task_id, status).await
+        self.repository.set_status(task_id, status).await
     }
 
     async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()> {
