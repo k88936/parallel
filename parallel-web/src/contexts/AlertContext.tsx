@@ -1,13 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import {createContext, useContext, useMemo, useState} from 'react';
 import type {Alert} from '../types';
+import {categoryToDefaultSound, type AudioSound} from '../services/audioAlerts';
 
 export type AlertType = Alert['type'];
-export type AudioCategory = 'alert' | 'nope' | 'yup' | 'bip-bop' | 'staplebops';
 
 export interface EventAudioConfig {
     enabled: boolean;
-    category: AudioCategory;
+    sound: AudioSound;
     volume: number;
 }
 
@@ -28,13 +28,13 @@ interface AlertPreferencesContextValue extends AlertSoundSettings {
 }
 
 const DEFAULT_CONFIGS: AlertSoundSettings = {
-    worker_offline: {enabled: true, category: 'nope', volume: 1.0},
-    worker_online: {enabled: true, category: 'yup', volume: 1.0},
-    task_timeout: {enabled: true, category: 'alert', volume: 1.0},
-    task_review_requested: {enabled: true, category: 'alert', volume: 1.0},
-    task_completed: {enabled: true, category: 'yup', volume: 1.0},
-    task_failed: {enabled: true, category: 'nope', volume: 1.0},
-    task_cancelled: {enabled: true, category: 'bip-bop', volume: 1.0},
+    worker_offline: {enabled: true, sound: 'nope-01.aac', volume: 1.0},
+    worker_online: {enabled: true, sound: 'yup-01.aac', volume: 1.0},
+    task_timeout: {enabled: true, sound: 'alert-01.aac', volume: 1.0},
+    task_review_requested: {enabled: true, sound: 'alert-01.aac', volume: 1.0},
+    task_completed: {enabled: true, sound: 'yup-01.aac', volume: 1.0},
+    task_failed: {enabled: true, sound: 'nope-01.aac', volume: 1.0},
+    task_cancelled: {enabled: true, sound: 'bip-bop-01.aac', volume: 1.0},
 };
 
 const STORAGE_PREFIX = 'parallel.alert.sound.';
@@ -49,7 +49,16 @@ const loadSettings = (): AlertSoundSettings => {
         const storedConfig = window.localStorage.getItem(`${STORAGE_PREFIX}${eventType}`);
         if (storedConfig) {
             try {
-                loaded[eventType] = JSON.parse(storedConfig);
+                const parsed = JSON.parse(storedConfig) as EventAudioConfig & {category?: 'alert' | 'nope' | 'yup' | 'bip-bop' | 'staplebops'};
+                if ('sound' in parsed && parsed.sound) {
+                    loaded[eventType] = parsed;
+                } else if (parsed.category) {
+                    loaded[eventType] = {
+                        enabled: parsed.enabled,
+                        volume: parsed.volume,
+                        sound: categoryToDefaultSound(parsed.category),
+                    };
+                }
             } catch {
                 // Keep default if parsing fails
             }

@@ -1,24 +1,23 @@
 import {useCallback, useEffect} from 'react';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import type {AlertPayload} from '../../types';
-import {AlertPreferencesProvider, useAlertPreferences} from '../../contexts/AlertContext';
+import {AlertPreferencesProvider, useAlertPreferences, type AlertType} from '../../contexts/AlertContext';
 import {
     alertWebSocketService,
     getAlertMessage,
     getSeverityLevel,
     shouldPlayVoiceAlert,
 } from '../../services/alertService';
-import {getRandomAudioFile, getAudioPath, playAudioFile} from '../../services/audioAlerts';
+import {getAudioPath, playAudioFile} from '../../services/audioAlerts';
 
 const AlertListener = ({children}: {children: React.ReactNode}) => {
     const {getEventConfig} = useAlertPreferences();
 
-    const playSound = useCallback((alertType: string, volume: number) => {
-        const eventConfig = getEventConfig(alertType as any);
+    const playSound = useCallback((alertType: AlertType, volume: number) => {
+        const eventConfig = getEventConfig(alertType);
         if (!eventConfig.enabled) return;
 
-        const audioFile = getRandomAudioFile(eventConfig.category);
-        const audioPath = getAudioPath(audioFile);
+        const audioPath = getAudioPath(eventConfig.sound);
         playAudioFile(audioPath, eventConfig.volume * volume).catch(err => {
             console.error('Failed to play alert sound:', err);
         });

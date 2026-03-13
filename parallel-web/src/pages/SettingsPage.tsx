@@ -7,14 +7,14 @@ import Text from '@jetbrains/ring-ui-built/components/text/text';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Checkbox from '@jetbrains/ring-ui-built/components/checkbox/checkbox';
 import Select from '@jetbrains/ring-ui-built/components/select/select';
-import {useAlertPreferences, type AlertType, type AudioCategory, type EventAudioConfig} from '../contexts/AlertContext';
-import {getRandomAudioFile, getAudioPath, playAudioFile} from '../services/audioAlerts';
+import {useAlertPreferences, type AlertType, type EventAudioConfig} from '../contexts/AlertContext';
+import {AUDIO_FILES, getAudioPath, playAudioFile, type AudioSound} from '../services/audioAlerts';
 import ScrollableSection from "@jetbrains/ring-ui-built/components/scrollable-section/scrollable-section";
 import Group from "@jetbrains/ring-ui-built/components/group/group.js";
 import Panel from "@jetbrains/ring-ui-built/components/panel/panel";
 
-interface CategoryOption {
-    key: AudioCategory;
+interface SoundOption {
+    key: AudioSound;
     label: string;
 }
 
@@ -24,13 +24,7 @@ interface EventConfig {
     description: string;
 }
 
-const AUDIO_CATEGORIES: CategoryOption[] = [
-    {key: 'alert', label: 'Alert (10 variations)'},
-    {key: 'nope', label: 'Nope (12 variations)'},
-    {key: 'yup', label: 'Yup (6 variations)'},
-    {key: 'bip-bop', label: 'Bip-Bop (10 variations)'},
-    {key: 'staplebops', label: 'Staplebops (7 variations)'},
-];
+const AUDIO_SOUNDS: SoundOption[] = AUDIO_FILES.map(sound => ({key: sound, label: sound.replace('.aac', '')}));
 
 const EVENT_CONFIGS: EventConfig[] = [
     {type: 'worker_offline', label: 'Worker Offline', description: 'When a worker goes offline unexpectedly'},
@@ -67,9 +61,9 @@ export const SettingsPage = () => {
         task_cancelled,
     };
 
-    const handleCategoryChange = useCallback((eventType: AlertType, category: CategoryOption | null) => {
-        if (category) {
-            setEventConfig(eventType, {...eventConfigs[eventType], category: category.key});
+    const handleSoundChange = useCallback((eventType: AlertType, sound: SoundOption | null) => {
+        if (sound) {
+            setEventConfig(eventType, {...eventConfigs[eventType], sound: sound.key});
         }
     }, [eventConfigs, setEventConfig]);
 
@@ -80,8 +74,7 @@ export const SettingsPage = () => {
     const handlePreview = useCallback(async (eventType: AlertType) => {
         setPreviewingEvent(eventType);
         const config = eventConfigs[eventType];
-        const audioFile = getRandomAudioFile(config.category);
-        const audioPath = getAudioPath(audioFile);
+        const audioPath = getAudioPath(config.sound);
 
         try {
             await playAudioFile(audioPath, config.volume);
@@ -99,12 +92,12 @@ export const SettingsPage = () => {
             </IslandHeader>
             <IslandContent>
                 <ScrollableSection>
-                    <Text>Configure sound effects for each event type. Each event can use a different sound category and
+                    <Text>Configure sound effects for each event type. Each event can use a different sound and
                         volume.</Text>
 
                     {EVENT_CONFIGS.map(eventConfig => {
                         const config = eventConfigs[eventConfig.type];
-                        const selectedCategory = AUDIO_CATEGORIES.find(cat => cat.key === config.category);
+                        const selectedSound = AUDIO_SOUNDS.find(sound => sound.key === config.sound);
 
                         return (
                             <Island key={eventConfig.type}>
@@ -124,9 +117,9 @@ export const SettingsPage = () => {
                                     {config.enabled && (
                                         <Panel className={"gap-4"}>
                                             <Select
-                                                data={AUDIO_CATEGORIES}
-                                                selected={selectedCategory}
-                                                onSelect={(cat) => handleCategoryChange(eventConfig.type, cat)}
+                                                data={AUDIO_SOUNDS}
+                                                selected={selectedSound}
+                                                onSelect={(sound) => handleSoundChange(eventConfig.type, sound)}
                                             />
 
                                             <Group>
