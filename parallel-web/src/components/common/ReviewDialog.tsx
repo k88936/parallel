@@ -136,7 +136,7 @@ export const ReviewDialog = ({
                             <Heading level={4}>Feedback</Heading>
                             <div className="mt-2">
                                  <textarea
-                                     className="min-h-[120px] w-full rounded border border-[var(--ring-border-color,#3d3d3d)] bg-[var(--ring-input-background,#1e1e1e)] px-[10px] py-[6px] text-[13px] text-[var(--ring-text-color,#fff)] focus:outline-none focus:border-[var(--ring-focused-border-color,#4a90d9)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                     className="min-h-[120px] w-full rounded border  px-[10px] py-[6px] text-[13px] text-[var(--ring-text-color,#fff)] focus:outline-none focus:border-[var(--ring-focused-border-color,#4a90d9)] disabled:opacity-50 disabled:cursor-not-allowed"
                                      value={feedbackMessage}
                                      onChange={(event) => onFeedbackChange(event.target.value)}
                                      placeholder="Add optional review feedback for the worker"
