@@ -34,6 +34,41 @@ const getErrorMessage = (error: unknown): string => {
     return 'Request failed';
 };
 
+const collectAncestorReposAndKeys = (
+    projectId: string,
+    projects: Record<string, Project>
+): { repos: RepoConfig[]; sshKeys: SshKeyConfig[] } => {
+    const repos: RepoConfig[] = [];
+    const sshKeys: SshKeyConfig[] = [];
+    const seenRepos = new Set<string>();
+    const seenKeys = new Set<string>();
+
+    let currentId: string | undefined = projectId;
+
+    while (currentId) {
+        const currentProject: Project | undefined = projects[currentId];
+        if (!currentProject) break;
+
+        currentProject.repos.forEach((repo: RepoConfig) => {
+            if (!seenRepos.has(repo.name)) {
+                repos.push(repo);
+                seenRepos.add(repo.name);
+            }
+        });
+
+        currentProject.ssh_keys.forEach((key: SshKeyConfig) => {
+            if (!seenKeys.has(key.name)) {
+                sshKeys.push(key);
+                seenKeys.add(key.name);
+            }
+        });
+
+        currentId = currentProject.parent_id;
+    }
+
+    return { repos, sshKeys };
+};
+
 export const ProjectPage = () => {
     const {projectId} = useParams<{ projectId: string }>();
     const navigate = useNavigate();
@@ -567,8 +602,8 @@ export const ProjectPage = () => {
             <CreateTaskDialog
                 show={showCreateTaskDialog}
                 projectId={actualProjectId}
-                repos={project.repos}
-                sshKeys={project.ssh_keys}
+                repos={actualProjectId ? collectAncestorReposAndKeys(actualProjectId, projects).repos : []}
+                sshKeys={actualProjectId ? collectAncestorReposAndKeys(actualProjectId, projects).sshKeys : []}
                 onClose={() => {
                     setShowCreateTaskDialog(false);
                     setCreateError(null);
