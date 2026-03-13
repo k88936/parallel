@@ -124,7 +124,7 @@ interface TaskQueueViewProps {
     projectId?: string;
 }
 
-export const TaskQueueView = ({showHeader = true}: TaskQueueViewProps) => {
+export const TaskQueueView = ({showHeader = true, projectId}: TaskQueueViewProps) => {
     const {filters, page, selectedTaskId, setFilters, setPage, setSelectedTaskId} = useQueueSearchParams();
     const tasks = useTasksStore((state) => state.tasks);
     const total = useTasksStore((state) => state.total);
@@ -161,7 +161,8 @@ export const TaskQueueView = ({showHeader = true}: TaskQueueViewProps) => {
         cursor: null,
         limit: null,
         offset: null,
-    }), [filters.status, filters.priority, filters.search]);
+        project_id: projectId || filters.project_id || undefined,
+    }), [filters.status, filters.priority, filters.search, projectId, filters.project_id]);
 
     useEffect(() => {
         void fetchTasks(query);
