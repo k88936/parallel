@@ -1,0 +1,72 @@
+.settings-container {
+    max-width: 800px;
+}
+
+.settings-section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border-radius: 4px;
+    background-color: var(--ring-section-background-color, #f5f5f5);
+}
+
+.event-section {
+    border-left: 3px solid var(--ring-border-color);
+}
+
+.event-header {
+    margin-bottom: 0.5rem;
+}
+
+.event-description {
+    font-size: 0.875rem;
+    color: var(--ring-secondary-text-color, #999);
+    margin: 0 0 1rem 0;
+    font-style: italic;
+}
+
+.event-controls {
+    margin-left: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--ring-border-color);
+}
+
+.settings-option {
+    margin-bottom: 1.5rem;
+}
+
+.settings-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.settings-slider {
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 0.5rem;
+}
+
+.settings-help-text {
+    font-size: 0.875rem;
+    color: var(--ring-secondary-text-color, #999);
+    margin: 0;
+}
+
+.settings-help-text ul {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+    padding: 0;
+}
+
+.settings-help-text li {
+    margin-bottom: 0.25rem;
+}
+
+.settings-actions {
+    margin-top: 2rem;
+    border-top: 2px solid var(--ring-border-color);
+    padding-top: 1rem;
+    background-color: transparent;
+}
+
+

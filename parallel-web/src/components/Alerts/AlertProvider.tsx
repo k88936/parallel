@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef} from 'react';
+import {useCallback, useEffect} from 'react';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import type {AlertPayload} from '../../types';
 import {AlertPreferencesProvider, useAlertPreferences} from '../../contexts/AlertContext';
@@ -6,29 +6,23 @@ import {
     alertWebSocketService,
     getAlertMessage,
     getSeverityLevel,
-    getVoiceAlertMessage,
     shouldPlayVoiceAlert,
 } from '../../services/alertService';
+import {getRandomAudioFile, getAudioPath, playAudioFile} from '../../services/audioAlerts';
 
 const AlertListener = ({children}: {children: React.ReactNode}) => {
-    const {voiceEnabled} = useAlertPreferences();
-    const speechSynthRef = useRef<SpeechSynthesis | null>(null);
+    const {getEventConfig} = useAlertPreferences();
 
-    const speak = useCallback((text: string) => {
-        if (!voiceEnabled || !text || typeof window === 'undefined' || !('speechSynthesis' in window)) {
-            return;
-        }
+    const playSound = useCallback((alertType: string, volume: number) => {
+        const eventConfig = getEventConfig(alertType as any);
+        if (!eventConfig.enabled) return;
 
-        if (!speechSynthRef.current) {
-            speechSynthRef.current = window.speechSynthesis;
-        }
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        speechSynthRef.current.speak(utterance);
-    }, [voiceEnabled]);
+        const audioFile = getRandomAudioFile(eventConfig.category);
+        const audioPath = getAudioPath(audioFile);
+        playAudioFile(audioPath, eventConfig.volume * volume).catch(err => {
+            console.error('Failed to play alert sound:', err);
+        });
+    }, [getEventConfig]);
 
     const handleAlert = useCallback((payload: AlertPayload) => {
         const message = getAlertMessage(payload.alert);
@@ -45,13 +39,10 @@ const AlertListener = ({children}: {children: React.ReactNode}) => {
                 alertService.message(message, 5000);
         }
 
-        if (voiceEnabled && shouldPlayVoiceAlert(payload.severity)) {
-            const voiceMessage = getVoiceAlertMessage(payload.alert);
-            if (voiceMessage) {
-                speak(voiceMessage);
-            }
+        if (shouldPlayVoiceAlert(payload.severity)) {
+            playSound(payload.alert.type, 1.0);
         }
-    }, [speak, voiceEnabled]);
+    }, [playSound]);
 
     useEffect(() => {
         alertWebSocketService.connect();
