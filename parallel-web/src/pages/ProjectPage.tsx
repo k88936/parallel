@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {projectsApi, tasksApi} from '../api';
 import {useProjectLayoutContext} from '../components/Layout';
+import {TaskQueueView} from '../components/TaskQueueView';
 import type {CreateProjectRequest, CreateTaskRequest, Project, RepoConfig, SshKeyConfig} from '../types';
 
 import Breadcrumbs from '@jetbrains/ring-ui-built/components/breadcrumbs/breadcrumbs';
@@ -524,15 +525,7 @@ export const ProjectPage = () => {
                     </Island>
                 </Tab>
                 <Tab id="tasks" title="Tasks">
-                    <Island>
-                        <IslandHeader border>
-                            <Heading level={3}>Tasks</Heading>
-                            <Button onClick={() => navigate(`/queue?projectId=${project.id}`)}>Open Queue</Button>
-                        </IslandHeader>
-                        <IslandContent>
-                            <Text>Use the queue view to inspect and manage tasks for this project.</Text>
-                        </IslandContent>
-                    </Island>
+                    <TaskQueueView showHeader={false} projectId={actualProjectId || undefined} />
                 </Tab>
             </Tabs>
 
