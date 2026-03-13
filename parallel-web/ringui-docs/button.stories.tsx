@@ -1,0 +1,157 @@
+import {Component, Fragment} from 'react';
+import pencilIcon from '@jetbrains/icons/pencil';
+import pencil12pxIcon from '@jetbrains/icons/pencil-12px';
+import hourglassIcon from '@jetbrains/icons/hourglass';
+
+import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
+import LoaderInline from '@jetbrains/ring-ui-built/components/loader-inline/loader-inline';
+import {ControlsHeight, ControlsHeightContext} from '@jetbrains/ring-ui-built/components/global/controls-height';
+import {Col, Grid} from '@jetbrains/ring-ui-built/components/grid/grid';
+import Row from '@jetbrains/ring-ui-built/components/grid/row';
+import Button, {type ButtonProps} from '@jetbrains/ring-ui-built/components/button/button';
+
+export default {
+  title: 'Components/Button',
+
+  component: Button,
+  argTypes: {
+    blue: {
+      table: {disable: true},
+    },
+  },
+};
+
+export const single = (args: ButtonProps) => <Button {...args} />;
+single.args = {children: 'Label'};
+single.parameters = {screenshots: {skip: true}};
+
+export const basic = () => (
+  <Grid className='buttons'>
+    {[ControlsHeight.S, ControlsHeight.M, ControlsHeight.L].map(height => (
+      <ControlsHeightContext.Provider value={height} key={height}>
+        {[
+          {inline: false},
+          {primary: true, inline: false},
+          {success: true, inline: false},
+          {error: true, inline: false},
+          {secondary: true, inline: false},
+          {ghost: true, inline: false},
+          {danger: true, inline: false},
+          {inline: true},
+          {primary: true, inline: true},
+          {ghost: true, inline: true},
+          {danger: true, inline: true},
+        ].map(typeProps => (
+          <Fragment key={JSON.stringify(typeProps)}>
+            {[{}, {active: true}, {disabled: true}, {loader: true}].map(stateProps => {
+              const icon = height === ControlsHeight.S && !typeProps.inline ? pencil12pxIcon : pencilIcon;
+              return (
+                <Row key={JSON.stringify(stateProps)} baseline='xs'>
+                  {[
+                    {children: 'Button'},
+                    {children: '...', short: true},
+                    {children: 'Button link', href: '/'},
+                    {children: 'Icon button', icon},
+                    {children: 'Icon to the right', iconRight: icon},
+                    {children: 'Button delayed', delayed: true},
+                    {children: 'Button dropdown', dropdown: true},
+                    {title: 'Just icon button', icon},
+                  ].map(contentProps => (
+                    <Col key={JSON.stringify(contentProps)}>
+                      <Button
+                        data-test={stateProps.active ? 'button-active' : undefined}
+                        {...typeProps}
+                        {...stateProps}
+                        {...contentProps}
+                      />
+                    </Col>
+                  ))}
+                </Row>
+              );
+            })}
+            <br />
+          </Fragment>
+        ))}
+      </ControlsHeightContext.Provider>
+    ))}
+  </Grid>
+);
+
+basic.storyName = 'basic';
+
+basic.parameters = {
+  screenshots: {
+    actions: [
+      {type: 'capture', name: '', selector: '#storybook-root'},
+      {type: 'focus', selector: '[data-test=button-active]'},
+      {type: 'capture', name: 'focus active', selector: '#storybook-root'},
+    ],
+  },
+  a11y: {
+    config: {
+      rules: [
+        {
+          id: 'color-contrast',
+          selector: '*:not([class*="disabled"]):not([class*="loader"])',
+        },
+      ],
+    },
+  },
+  storyStyles: `
+<style>
+  .buttons {
+    background: var(--ring-content-background-color);
+  }
+
+  .buttons :is(button, a) {
+    margin: 0 8px;
+  }
+</style>`,
+};
+
+export const longAction = () => {
+  class Sleeper extends Component {
+    state = {
+      loading: false,
+    };
+
+    load = () => {
+      this.setState({loading: true}, () => {
+        setTimeout(this.sleep, 2000);
+      });
+    };
+
+    sleep = () => {
+      const date = Date.now();
+      let curDate;
+      do {
+        curDate = Date.now();
+      } while (curDate - date < 2000);
+
+      this.setState({loading: false});
+    };
+
+    render() {
+      const {loading} = this.state;
+      return (
+        <Fragment>
+          <Button loader={loading} onClick={this.load}>
+            Sleep
+          </Button>
+          <Button title='Sleep' loader={loading} icon={hourglassIcon} onClick={this.load} />
+          {loading && (
+            <>
+              <LoaderInline />
+              <Loader squares />
+            </>
+          )}
+        </Fragment>
+      );
+    }
+  }
+
+  return <Sleeper />;
+};
+
+longAction.storyName = 'long action';
+longAction.parameters = {screenshots: {skip: true}};
