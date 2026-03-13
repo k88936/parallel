@@ -144,17 +144,11 @@ export const AgentsPage = () => {
                 title="Agents"
             >
                 {error && workers.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                        <Text>{error}</Text>
-                    </div>
+                    <Text>{error}</Text>
                 ) : loading && workers.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                        <Loader />
-                    </div>
+                    <Loader/>
                 ) : workers.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                        <Text>No agents connected</Text>
-                    </div>
+                    <Text>No agents connected</Text>
                 ) : (
                     <div className="p-0">
                         {workers.map((worker) => (
@@ -163,9 +157,11 @@ export const AgentsPage = () => {
                                 className={`px-4 py-3 rounded-2xl cursor-pointer flex items-center gap-3 hover:bg-(--ring-hover-background-color) ${selectedWorkerId === worker.id ? 'bg-(--ring-selected-background-color)' : ''}`}
                                 onClick={() => setSelectedWorkerId(worker.id)}
                             >
-                                <Group className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT_COLOR[worker.status]}`} />
+                                <Group
+                                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT_COLOR[worker.status]}`}/>
                                 <Group className="flex-1 min-w-0">
-                                    <Group className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{worker.name}</Group>
+                                    <Group
+                                        className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">{worker.name}</Group>
                                     <Group className="flex gap-2 text-xs text-(--ring-secondary-text-color) mt-0.5">
                                         <Group>{worker.status}</Group>
                                         <Group>Tasks: {worker.current_task_count}</Group>
@@ -178,59 +174,74 @@ export const AgentsPage = () => {
                 )}
             </Sidebar>
 
-            <main className="flex-1 flex flex-col overflow-hidden m-4 ml-0">
+            <Group className="flex-1 flex flex-col">
                 {!selectedWorkerId ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
+                    <Group
+                        className="flex items-center justify-center flex-1">
                         <Text>Select an agent to view details</Text>
-                    </div>
+                    </Group>
                 ) : infoLoading && !selectedWorkerInfo ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
-                        <Loader />
-                    </div>
+                    <Group
+                        className="flex items-center justify-center flex-1">
+                        <Loader/>
+                    </Group>
                 ) : selectedWorkerInfo ? (
-                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                    <Group className="flex-1 flex flex-col gap-4 overflow-hidden">
                         {error && (
-                            <div className="flex items-center justify-center h-full text-[var(--ring-secondary-text-color,#888)]">
+                            <Group
+                                className="flex items-center justify-center h-full">
                                 <Text>{error}</Text>
-                            </div>
+                            </Group>
                         )}
-                        <div className="flex gap-4 shrink-0">
-                            <Island>
+                        <Group className="flex gap-4 shrink-0">
+                            <Island className={"flex-1"}>
                                 <IslandHeader border>
                                     <Heading level={3}>Info</Heading>
                                 </IslandHeader>
                                 <IslandContent>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Name</div>
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Name
+                                            </div>
                                             <div className="text-sm">{selectedWorkerInfo.name}</div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">ID</div>
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">ID
+                                            </div>
                                             <div className="text-sm">{selectedWorkerInfo.id.substring(0, 8)}...</div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Status</div>
+                                            <div
+                                                className="text-xs text-[var(--ring-secondary-text-color,#888)]">Status
+                                            </div>
                                             <div className="text-sm">{selectedWorkerInfo.status}</div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max Concurrent</div>
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Max
+                                                Concurrent
+                                            </div>
                                             <div className="text-sm">{selectedWorkerInfo.max_concurrent}</div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Has Git</div>
-                                            <div className="text-sm">{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Has
+                                                Git
+                                            </div>
+                                            <div
+                                                className="text-sm">{selectedWorkerInfo.capabilities.has_git ? 'Yes' : 'No'}</div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Last Heartbeat</div>
-                                            <div className="text-sm">{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
+                                            <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Last
+                                                Heartbeat
+                                            </div>
+                                            <div
+                                                className="text-sm">{formatTimeAgo(selectedWorkerInfo.last_heartbeat)}</div>
                                         </div>
                                     </div>
                                 </IslandContent>
                             </Island>
 
                             {selectedWorkerResources && (
-                                <Island>
+                                <Island className={"flex-1"}>
                                     <IslandHeader border>
                                         <Heading level={3}>Resources</Heading>
                                     </IslandHeader>
@@ -240,7 +251,8 @@ export const AgentsPage = () => {
                                                 <span>CPU</span>
                                                 <span>{selectedWorkerResources.cpu_usage_percent.toFixed(1)}%</span>
                                             </div>
-                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
+                                            <div
+                                                className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.cpu_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.cpu_usage_percent}%`}}
@@ -256,7 +268,8 @@ export const AgentsPage = () => {
                                                     {selectedWorkerResources.memory_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
-                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
+                                            <div
+                                                className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.memory_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.memory_usage_percent}%`}}
@@ -272,7 +285,8 @@ export const AgentsPage = () => {
                                                     {selectedWorkerResources.disk_usage_percent.toFixed(1)}%)
                                                 </span>
                                             </div>
-                                            <div className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
+                                            <div
+                                                className="h-2 bg-[var(--ring-border-color,#3d3d3d)] rounded overflow-hidden mt-1">
                                                 <div
                                                     className={`h-full transition-[width] duration-300 ${getResourceBarColor(selectedWorkerResources.disk_usage_percent)}`}
                                                     style={{width: `${selectedWorkerResources.disk_usage_percent}%`}}
@@ -283,26 +297,32 @@ export const AgentsPage = () => {
                                 </Island>
                             )}
 
-                            <Island>
+                            <Island className={"flex-1"}>
                                 <IslandHeader border>
                                     <Heading level={3}>Capabilities</Heading>
                                 </IslandHeader>
                                 <IslandContent>
                                     <div className="flex flex-col gap-1">
-                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Available Agents</div>
+                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Available
+                                            Agents
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.available_agents.length > 0 ? (
-                                                selectedWorkerInfo.capabilities.available_agents.map((agent) => <Tag key={agent}>{agent}</Tag>)
+                                                selectedWorkerInfo.capabilities.available_agents.map((agent) => <Tag
+                                                    key={agent}>{agent}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-1 mt-3">
-                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Supported Languages</div>
+                                        <div className="text-xs text-[var(--ring-secondary-text-color,#888)]">Supported
+                                            Languages
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {selectedWorkerInfo.capabilities.supported_languages.length > 0 ? (
-                                                selectedWorkerInfo.capabilities.supported_languages.map((language) => <Tag key={language}>{language}</Tag>)
+                                                selectedWorkerInfo.capabilities.supported_languages.map((language) =>
+                                                    <Tag key={language}>{language}</Tag>)
                                             ) : (
                                                 <Text>None</Text>
                                             )}
@@ -310,7 +330,7 @@ export const AgentsPage = () => {
                                     </div>
                                 </IslandContent>
                             </Island>
-                        </div>
+                        </Group>
 
                         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                             <Island className="flex-1 flex flex-col overflow-hidden">
@@ -331,9 +351,9 @@ export const AgentsPage = () => {
                                 </IslandContent>
                             </Island>
                         </div>
-                    </div>
+                    </Group>
                 ) : null}
-            </main>
+            </Group>
         </Group>
     );
 };

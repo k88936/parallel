@@ -3,13 +3,14 @@ import {AppHeader, ProjectLayout} from './components/Layout';
 import {AlertProvider} from './components/Alerts';
 import {AgentsPage, ProjectPage, QueuePage, SettingsPage} from './pages';
 import Theme, {ThemeProvider} from '@jetbrains/ring-ui-built/components/global/theme';
+import Group from "@jetbrains/ring-ui-built/components/group/group.js";
 
 export const App = () => {
     return (
         <ThemeProvider theme={Theme.DARK}>
             <AlertProvider>
                 <BrowserRouter>
-                    <div className="flex flex-row min-h-screen bg-(--ring-secondary-background-color) text-(--ring-text-color)">
+                    <Group className="flex flex-row min-h-screen bg-(--ring-secondary-background-color)">
                         <AppHeader />
                         <Routes>
                             <Route path="/" element={<Navigate to="/projects/root" replace />} />
@@ -21,7 +22,7 @@ export const App = () => {
                             <Route path="/queue" element={<QueuePage />} />
                             <Route path="/settings" element={<SettingsPage />} />
                         </Routes>
-                    </div>
+                    </Group>
                 </BrowserRouter>
             </AlertProvider>
         </ThemeProvider>

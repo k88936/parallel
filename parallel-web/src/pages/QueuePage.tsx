@@ -1,7 +1,8 @@
-import {Fragment, useEffect, useMemo, useRef, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useQueueSearchParams} from '../hooks/useQueueSearchParams';
 import {useTasksStore} from '../stores/useTasksStore';
 import type {FeedbackType, ListTasksQuery, TaskPriority, TaskStatus} from '../types';
+import {ReviewDialog} from '../components/common/ReviewDialog';
 
 import Heading from '@jetbrains/ring-ui-built/components/heading/heading';
 import Text from '@jetbrains/ring-ui-built/components/text/text';
@@ -20,13 +21,6 @@ import Pager from '@jetbrains/ring-ui-built/components/pager/pager';
 import Selection from '@jetbrains/ring-ui-built/components/table/selection';
 import TableContainer from '@jetbrains/ring-ui-built/components/table/table';
 import type {Column, SortParams} from '@jetbrains/ring-ui-built/components/table/header-cell';
-import Dialog from '@jetbrains/ring-ui-built/components/dialog/dialog';
-import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
-import Link from '@jetbrains/ring-ui-built/components/link/link';
-import clipboard from '@jetbrains/ring-ui-built/components/clipboard/clipboard';
-import Markdown from "@jetbrains/ring-ui-built/components/markdown/markdown";
-import MarkdownIt from 'markdown-it';
-import {highlight} from "@jetbrains/ring-ui-built/components/code/code";
 
 const PAGE_SIZE = 20;
 const PRIORITY_ORDER: Record<TaskPriority, number> = {
@@ -125,17 +119,6 @@ const getDefaultFeedbackMessage = (feedbackType: FeedbackType): string => {
     }
 };
 
-const markdownIt = new MarkdownIt('commonmark', {
-    html: false,
-    highlight(str, lang) {
-        if (lang && highlight.getLanguage(lang)) {
-            return highlight.highlight(str, {
-                language: lang
-            }).value;
-        }
-        return '';
-    }
-}).enable('table');
 export const QueuePage = () => {
     const {filters, page, selectedTaskId, setFilters, setPage, setSelectedTaskId} = useQueueSearchParams();
     const tasks = useTasksStore((state) => state.tasks);
@@ -366,28 +349,6 @@ export const QueuePage = () => {
             setReviewSubmittingType(null);
         }
     };
-
-    const reviewCheckoutCommand = reviewModalTask
-        ? `git fetch && git checkout ${reviewModalTask.target_branch}`
-        : '';
-    const renderCheckoutCommand = () => (
-        <Fragment>
-            <div>
-                <code
-                    className="block rounded bg-[var(--ring-sidebar-background-color,#1e1e1e)] px-3 py-2 font-mono text-xs break-all">
-                    {reviewCheckoutCommand}
-                </code>
-            </div>
-            <div>
-                <Link
-                    onClick={() => clipboard.copyText(reviewCheckoutCommand, 'Command copied!', 'Command copying error')}
-                    pseudo
-                >
-                    Copy
-                </Link>
-            </div>
-        </Fragment>
-    );
 
     const handleSort = ({column, order}: SortParams) => {
         setSortKey(column.id);
@@ -689,124 +650,18 @@ export const QueuePage = () => {
                 onReject={() => setRetryConfirm(null)}
             />
 
-            <Dialog
+            <ReviewDialog
                 show={reviewModalTask !== null}
-                label="Review Task"
-                onCloseAttempt={handleCloseReviewModal}
-                onOverlayClick={handleCloseReviewModal}
-                onEscPress={handleCloseReviewModal}
-                closeButtonInside
-                showCloseButton
-                trapFocus
-            >
-                <IslandHeader>
-                    {reviewModalTask ? `Review ${reviewModalTask.title}` : 'Review Task'}
-                </IslandHeader>
-                <IslandContent className="p-4">
-                    {reviewModalTask ? (
-                        <div className="flex flex-col gap-4">
-                            {/*<div>*/}
-                            {/*    <Text className="text-[var(--ring-secondary-text-color,#888)]">*/}
-                            {/*        Task {shortenId(reviewModalTask.id)}*/}
-                            {/*    </Text>*/}
-                            {/*    <div className="mt-2 flex flex-wrap gap-2">*/}
-                            {/*        <Tag className={getStatusColor(reviewModalTask.status)}>*/}
-                            {/*            {reviewModalTask.status.replace('_', ' ')}*/}
-                            {/*        </Tag>*/}
-                            {/*        <Tag className={getPriorityColor(reviewModalTask.priority)}>*/}
-                            {/*            {reviewModalTask.priority}*/}
-                            {/*        </Tag>*/}
-                            {/*    </div>*/}
-                            {/*</div>*/}
-
-                            <div>
-                                <Heading level={4}>Checkout in local IDE</Heading>
-                                <div className="mt-2 flex flex-col gap-2">
-                                    {renderCheckoutCommand()}
-                                </div>
-                            </div>
-
-                            <div>
-                                <Heading level={4}>Messages</Heading>
-                                {reviewModalLoading && !reviewModalData ? (
-                                    <div className="mt-2">
-                                        <Loader/>
-                                    </div>
-                                ) : reviewModalData && reviewModalData.messages.length > 0 ? (
-                                    <div className="mt-2 max-h-[320px] overflow-y-auto">
-                                        {reviewModalData.messages.map((message, index) => (
-                                            <div
-                                                key={`${message.timestamp}-${index}`}
-                                                className="mb-2 rounded bg-[var(--ring-sidebar-background-color,#1e1e1e)] p-3 last:mb-0"
-                                            >
-                                                <div className="mb-2 flex items-center gap-2">
-                                                    <Tag>{message.role}</Tag>
-                                                    <span
-                                                        className="text-xs text-[var(--ring-secondary-text-color,#888)]">
-                                                         {new Date(message.timestamp).toLocaleString()}
-                                                     </span>
-                                                </div>
-                                                <Markdown>
-                                                    <div dangerouslySetInnerHTML={{
-                                                        __html: markdownIt.render(message.content),
-                                                    }}/>
-                                                </Markdown>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <Text className="mt-2">No review messages available yet.</Text>
-                                )}
-                            </div>
-
-                            <div>
-                                <Heading level={4}>Feedback</Heading>
-                                <div className="mt-2">
-                                     <textarea
-                                         className="min-h-[120px] w-full rounded border border-[var(--ring-border-color,#3d3d3d)] bg-[var(--ring-input-background,#1e1e1e)] px-[10px] py-[6px] text-[13px] text-[var(--ring-text-color,#fff)] focus:outline-none focus:border-[var(--ring-focused-border-color,#4a90d9)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                         value={reviewFeedbackMessage}
-                                         onChange={(event) => setReviewFeedbackMessage(event.target.value)}
-                                         placeholder="Add optional review feedback for the worker"
-                                         disabled={reviewSubmittingType !== null}
-                                     />
-                                </div>
-                                {reviewFeedbackError && (
-                                    <Text className="mt-2 text-[var(--ring-error-color,#f44336)]">
-                                        {reviewFeedbackError}
-                                    </Text>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <Text>No review task selected.</Text>
-                    )}
-                </IslandContent>
-                <Panel className="flex justify-end gap-2">
-                    <Button
-                        primary
-                        onClick={() => void handleSubmitReviewFeedback('approve')}
-                        disabled={!reviewModalTask || reviewSubmittingType !== null}
-                    >
-                        {reviewSubmittingType === 'approve' ? 'Approving...' : 'Approve'}
-                    </Button>
-                    <Button
-                        onClick={() => void handleSubmitReviewFeedback('request_changes')}
-                        disabled={!reviewModalTask || reviewSubmittingType !== null}
-                    >
-                        {reviewSubmittingType === 'request_changes' ? 'Sending...' : 'Request Changes'}
-                    </Button>
-                    <Button
-                        danger
-                        onClick={() => void handleSubmitReviewFeedback('abort')}
-                        disabled={!reviewModalTask || reviewSubmittingType !== null}
-                    >
-                        {reviewSubmittingType === 'abort' ? 'Aborting...' : 'Abort'}
-                    </Button>
-                    <Button onClick={handleCloseReviewModal} disabled={reviewSubmittingType !== null}>
-                        Close
-                    </Button>
-                </Panel>
-            </Dialog>
+                task={reviewModalTask}
+                reviewData={reviewModalData}
+                loading={reviewModalLoading}
+                feedbackMessage={reviewFeedbackMessage}
+                feedbackError={reviewFeedbackError}
+                submittingType={reviewSubmittingType}
+                onClose={handleCloseReviewModal}
+                onFeedbackChange={setReviewFeedbackMessage}
+                onSubmitFeedback={handleSubmitReviewFeedback}
+            />
         </Group>
     );
 };
