@@ -122,6 +122,8 @@ pub trait TaskRepositoryTrait: Send + Sync {
 
     async fn count(&self, status: Option<TaskStatus>) -> Result<u64>;
 
+    async fn get_status(&self, task_id: &Uuid) -> ServerResult<TaskStatus>;
+
     async fn set_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()>;
 
     async fn set_claimed_by(&self, task_id: &Uuid, worker_id: Option<Uuid>) -> ServerResult<()>;
@@ -137,8 +139,6 @@ pub trait TaskRepositoryTrait: Send + Sync {
     async fn find_orphaned(&self) -> ServerResult<Vec<Task>>;
 
     async fn find_timed_out(&self) -> ServerResult<Vec<Task>>;
-
-    async fn fail(&self, task_id: &Uuid) -> ServerResult<()>;
 }
 
 #[async_trait]
@@ -361,6 +361,16 @@ impl TaskRepositoryTrait for TaskRepository {
         Ok(count)
     }
 
+    async fn get_status(&self, task_id: &Uuid) -> ServerResult<TaskStatus> {
+        let mut conn = self.get_conn()?;
+        let task = tasks_schema::table
+            .filter(tasks_schema::id.eq(task_id.to_string()))
+            .first::<DbTask>(&mut conn)
+            .map_err(|_| ServerError::TaskNotFound(*task_id))?;
+
+        Ok(TaskStatus::from_str(&task.status).unwrap_or(TaskStatus::Created))
+    }
+
     async fn set_status(&self, task_id: &Uuid, status: TaskStatus) -> ServerResult<()> {
         let now = Utc::now().naive_utc();
         
@@ -510,26 +520,6 @@ impl TaskRepositoryTrait for TaskRepository {
             .collect();
 
         Ok(result)
-    }
-
-    async fn fail(&self, task_id: &Uuid) -> ServerResult<()> {
-        let now = Utc::now().naive_utc();
-        
-        let mut conn = self.get_conn()?;
-        let rows_affected = diesel::update(tasks_schema::table)
-            .filter(tasks_schema::id.eq(task_id.to_string()))
-            .set((
-                tasks_schema::status.eq(TaskStatus::Failed.as_str()),
-                tasks_schema::claimed_by.eq::<Option<String>>(None),
-                tasks_schema::updated_at.eq(now),
-            ))
-            .execute(&mut conn)?;
-
-        if rows_affected == 0 {
-            return Err(ServerError::TaskNotFound(*task_id));
-        }
-
-        Ok(())
     }
 }
 

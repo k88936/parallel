@@ -167,7 +167,21 @@ impl TaskServiceTrait for TaskService {
     }
 
     async fn fail_task(&self, task_id: &Uuid, _reason: &str) -> ServerResult<()> {
-        self.repository.fail(task_id).await
+        let task = self.repository.find_by_id(task_id).await?;
+
+        if !matches!(
+            task.status,
+            TaskStatus::InProgress | TaskStatus::Claimed | TaskStatus::AwaitingReview | TaskStatus::PendingResponse | TaskStatus::Queued
+        ) {
+            return Err(ServerError::InvalidStatus(format!(
+                "Task with status '{}' cannot be failed.",
+                task.status.as_str()
+            )));
+        }
+
+        self.repository.set_status(task_id, TaskStatus::Failed).await?;
+        self.repository.set_claimed_by(task_id, None).await?;
+        Ok(())
     }
 
     async fn retry_task(&self, task_id: &Uuid, clear_review_data: bool) -> ServerResult<Task> {
