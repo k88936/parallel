@@ -62,8 +62,11 @@ src/
 
 ### Ring UI Components
 
-Always prefer Ring UI components over custom implementations:
-storybook example is in `parallel-web/ringui-docs`
+* Always prefer Ring UI components over custom implementations:
+* Never use .css file, use tailwindcss inline instead
+* never config color in css
+* Never use div/span/... use ringui's Group , Island ... instead as container
+* ringui component use example is in `parallel-web/ringui-docs`
 
 ## Types
 
